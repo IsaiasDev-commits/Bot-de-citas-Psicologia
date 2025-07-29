@@ -1,0 +1,4 @@
+BOT: Registré que tienes soledad desde 2025-07-20. ¿Cómo ha sido esta experiencia para ti?
+USER: Quiero agendar una cita
+BOT: Vamos a agendar tu cita. Por favor completa:
+BOT: ✅ Cita agendada para el 2025-07-26 a las 14:00. Contactaremos al 0985556466 para confirmar.

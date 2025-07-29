@@ -1,0 +1,4 @@
+BOT: Registré que tienes ansiedad desde 2025-07-10. ¿Cómo ha sido esta experiencia para ti?
+USER: Quiero agendar una cita
+BOT: Vamos a agendar tu cita. Por favor completa:
+BOT: ✅ Cita agendada para el 2025-07-19 a las 02:00 PM.

@@ -1,0 +1,4 @@
+BOT: Registré que tienes preocupación excesiva desde 2025-07-13. ¿Cómo ha sido esta experiencia para ti?
+USER: Quiero agendar una cita
+BOT: Vamos a agendar tu cita. Por favor completa:
+BOT: ✅ Cita agendada para el 2025-07-24 a las 02:00 PM. Contactaremos al 0985556466 para confirmar.

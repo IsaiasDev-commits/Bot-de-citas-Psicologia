@@ -1,0 +1,4 @@
+BOT: Registré que tienes apatía desde 2025-07-15. ¿Cómo ha sido esta experiencia para ti?
+USER: Quiero agendar una cita
+BOT: Vamos a agendar tu cita. Por favor completa:
+BOT: ✅ Cita agendada para el 2025-07-20 a las 08:00 AM.

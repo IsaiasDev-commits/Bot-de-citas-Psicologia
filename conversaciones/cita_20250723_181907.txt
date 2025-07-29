@@ -1,0 +1,4 @@
+BOT: Registré que tienes ansiedad desde 2025-07-23. ¿Cómo ha sido esta experiencia para ti?
+USER: Quiero agendar una cita
+BOT: Vamos a agendar tu cita. Por favor completa:
+BOT: ✅ Cita agendada para el 2025-07-24 a las 14:00. Contactaremos al 0985556466 para confirmar.

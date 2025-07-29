@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Equilibra - Tu espacio emocional seguro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      /* Sistema de diseño */
+      --primary: #4CAF82;
+      --primary-dark: #3A8D6D;
+      --primary-light: #E8F5E9;
+      --secondary: #607D8B;
+      --accent: #FF7043;
+      --background: #FAFAFA;
+      --surface: #FFFFFF;
+      --error: #D32F2F;
+      --text-primary: #212121;
+      --text-secondary: #757575;
+      --divider: #BDBDBD;
+      
+      /* Sombras */
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+      
+      /* Bordes */
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      
+      /* Espaciado */
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 16px;
+      --space-lg: 24px;
+      --space-xl: 32px;
+    }
+
+    /* Modo oscuro */
+    [data-theme="dark"] {
+      --primary: #66BB6A;
+      --primary-dark: #81C784;
+      --primary-light: #1B5E20;
+      --secondary: #90A4AE;
+      --background: #121212;
+      --surface: #1E1E1E;
+      --text-primary: #E0E0E0;
+      --text-secondary: #9E9E9E;
+      --divider: #424242;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      touch-action: manipulation;
+    }
+
+    body {
+      font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+      background-color: var(--background);
+      color: var(--text-primary);
+      line-height: 1.6;
+      padding: var(--space-md);
+      max-width: 800px;
+      margin: 0 auto;
+      transition: background-color 0.3s ease, color 0.3s ease;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    h1, h2, h3, h4 {
+      color: var(--primary);
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: var(--space-md);
+      text-align: center;
+    }
+
+    /* Layout */
+    .container {
+      width: 100%;
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: var(--space-lg);
+    }
+
+    .logo-container {
+      width: 120px;
+      height: 120px;
+      margin-bottom: var(--space-md);
+    }
+
+    .logo-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 50%;
+      border: 3px solid var(--primary);
+      padding: var(--space-sm);
+    }
+
+    /* Controls */
+    .top-controls {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: var(--space-md);
+      margin-bottom: var(--space-md);
+    }
+
+    /* Cards */
+    .card {
+      background-color: var(--surface);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: var(--space-md);
+      margin-bottom: var(--space-md);
+      transition: all 0.3s ease;
+      will-change: transform;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    /* Chat */
+    .chat-container {
+      height: 400px;
+      max-height: 60vh;
+      overflow-y: auto;
+      padding: var(--space-md);
+      margin-bottom: var(--space-md);
+      scroll-behavior: smooth;
+      background-color: var(--surface);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .message {
+      margin-bottom: var(--space-md);
+      max-width: 85%;
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-md);
+      position: relative;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      background-color: var(--primary-light);
+      color: var(--text-primary);
+      margin-left: auto;
+      border-bottom-right-radius: var(--space-xs);
+    }
+
+    .message.bot {
+      background-color: var(--surface);
+      color: var(--text-primary);
+      margin-right: auto;
+      border-bottom-left-radius: var(--space-xs);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .message-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: var(--space-xs);
+    }
+
+    .bot-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      margin-right: var(--space-sm);
+      object-fit: cover;
+    }
+
+    .message strong {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--primary);
+    }
+
+    /* Typing indicator */
+    .typing-indicator {
+      display: flex;
+      align-items: center;
+      padding: var(--space-sm) var(--space-md);
+      background-color: var(--surface);
+      border-radius: var(--radius-md);
+      max-width: 85%;
+      margin-right: auto;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: var(--space-md);
+    }
+
+    .typing-dots {
+      display: flex;
+      padding: var(--space-xs) 0;
+    }
+
+    .typing-dots span {
+      width: 8px;
+      height: 8px;
+      background-color: var(--primary);
+      border-radius: 50%;
+      margin: 0 2px;
+      animation: bounce 1.5s infinite ease-in-out;
+    }
+
+    /* Forms */
+    form {
+      background-color: var(--surface);
+      padding: var(--space-md);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: var(--space-md);
+    }
+
+    input, textarea, select {
+      width: 100%;
+      padding: var(--space-md);
+      border: 1px solid var(--divider);
+      border-radius: var(--radius-sm);
+      margin: var(--space-sm) 0;
+      font-size: 1rem;
+      background-color: var(--surface);
+      color: var(--text-primary);
+      transition: all 0.3s ease;
+    }
+
+    input[type="tel"] {
+      inputmode: numeric;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(76, 175, 130, 0.2);
+    }
+
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    /* Buttons */
+    button, input[type="submit"] {
+      padding: var(--space-md) var(--space-lg);
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      min-height: 48px;
+      user-select: none;
+    }
+
+    button:hover, input[type="submit"]:hover {
+      background-color: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    button:active, input[type="submit"]:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background-color: transparent;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+    }
+
+    .btn-secondary:hover {
+      background-color: rgba(76, 175, 130, 0.1);
+    }
+
+    /* Checkbox list */
+    .checkbox-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+    }
+
+    .checkbox-list label {
+      display: flex;
+      align-items: center;
+      padding: var(--space-sm);
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+      cursor: pointer;
+      min-height: 48px;
+    }
+
+    .checkbox-list label:hover {
+      background-color: rgba(76, 175, 130, 0.1);
+    }
+
+    .checkbox-list input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-right: var(--space-sm);
+      accent-color: var(--primary);
+    }
+
+    /* Utility classes */
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: var(--primary);
+      margin-bottom: var(--space-sm);
+    }
+
+    .info-msg {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      text-align: center;
+      margin: var(--space-sm) 0;
+    }
+
+    .warning-msg {
+      color: var(--error);
+      font-weight: 500;
+      text-align: center;
+      margin: var(--space-sm) 0;
+    }
+
+    .form-row {
+      display: flex;
+      gap: var(--space-md);
+      align-items: center;
+    }
+
+    .form-row > * {
+      flex: 1;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+      margin-left: var(--space-sm);
+    }
+
+    /* Responsive */
+    @media (max-width: 600px), (max-height: 700px) {
+      body {
+        padding: var(--space-sm);
+        font-size: 14px;
+      }
+      
+      h1 {
+        font-size: 1.5rem;
+      }
+      
+      .form-row {
+        flex-direction: column;
+        gap: var(--space-sm);
+      }
+      
+      .message {
+        max-width: 90%;
+        padding: 6px 12px;
+        margin-bottom: 12px;
+      }
+      
+      .chat-container {
+        height: 55vh;
+        padding: 8px;
+      }
+      
+      button, input[type="submit"] {
+        width: 100%;
+        padding: 12px;
+      }
+      
+      .logo-container {
+        width: 80px;
+        height: 80px;
+      }
+      
+      .top-controls {
+        gap: var(--space-sm);
+      }
+    }
+
+    @media screen and (min-width: 600px) and (orientation: landscape) {
+      .container {
+        max-width: 90%;
+      }
+      
+      .chat-container {
+        height: 50vh;
+      }
+    }
+
+    /* Animations */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Equilibra</h1>
+      <div class="logo-container">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Equilibra - Espacio seguro">
+      </div>
+    </div>
+
+    {% if estado == "inicio" %}
+    <div class="card welcome-message">
+      <p>💬 Bienvenido a Equilibra, tu espacio seguro para explorar tus emociones y conectarte con apoyo profesional cuando lo necesites.</p>
+    </div>
+    {% endif %}
+
+    <div class="top-controls">
+      <button class="btn-secondary" onclick="reiniciarChat()">
+        <span class="icon">🔄</span> Reiniciar
+      </button>
+      <div class="toggle-dark" onclick="toggleDarkMode()">🌙</div>
+    </div>
+
+    {% if estado == "inicio" %}
+      <form method="POST" class="card">
+        <div class="checkbox-list">
+          <p class="section-title">¿Cómo te sientes hoy?</p>
+          {% for sintoma in sintomas %}
+            <label><input type="checkbox" name="sintomas" value="{{ sintoma }}"> {{ sintoma }}</label>
+          {% endfor %}
+        </div>
+        <input type="submit" value="Continuar" />
+      </form>
+
+    {% elif estado == "registrar_duracion" %}
+      <div class="chat-container card">
+        {% for msg in history %}
+          <div class="message {{ msg.sender }}">
+            {% if msg.sender == 'bot' %}
+              <div class="message-header">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+                <strong>Equilibra:</strong>
+              </div>
+            {% else %}
+              <strong>Tú:</strong>
+            {% endif %}
+            {{ msg.message }}
+          </div>
+        {% endfor %}
+      </div>
+      <form method="POST" class="card">
+        <p class="section-title">¿Desde cuándo experimentas {{ sintoma_actual.lower() }}?</p>
+        <input type="date" name="fecha_inicio_sintoma" min="{{ min_sintoma }}" max="{{ max_sintoma }}" value="{{ hoy }}" required />
+        <p class="info-msg">Selecciona la fecha aproximada cuando comenzó este síntoma</p>
+        <input type="submit" value="Continuar" />
+      </form>
+
+    {% elif estado == "chat" %}
+      <div class="chat-container card" id="chatBox">
+        {% for msg in history %}
+          <div class="message {{ msg.sender }}">
+            {% if msg.sender == 'bot' %}
+              <div class="message-header">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+                <strong>Equilibra:</strong>
+              </div>
+            {% else %}
+              <strong>Tú:</strong>
+            {% endif %}
+            {{ msg.message }}
+          </div>
+        {% endfor %}
+        <div id="typingIndicator" class="typing-indicator" style="display: none;">
+          <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+          <div class="typing-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </div>
+      <form method="POST" class="card">
+        <textarea name="user_input" placeholder="Escribe tu respuesta aquí..." rows="3" required></textarea>
+        <div class="form-row">
+          <input type="submit" value="Enviar" />
+          <button type="button" class="btn-secondary" onclick="solicitarCita()">Solicitar cita</button>
+        </div>
+      </form>
+
+    {% elif estado == "agendar_cita" %}
+      <div class="chat-container card">
+        {% for msg in history %}
+          <div class="message {{ msg.sender }}">
+            {% if msg.sender == 'bot' %}
+              <div class="message-header">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+                <strong>Equilibra:</strong>
+              </div>
+            {% else %}
+              <strong>Tú:</strong>
+            {% endif %}
+            {{ msg.message }}
+          </div>
+        {% endfor %}
+      </div>
+      <form method="POST" id="citaForm" class="card">
+        <p class="section-title">Selecciona una fecha para tu cita:</p>
+        <input type="date" name="fecha_cita" min="{{ min_cita }}" max="{{ max_cita }}" required />
+
+        <p class="section-title">Selecciona un horario disponible:</p>
+        <select name="hora_cita" required disabled>
+          <option value="" disabled selected>Selecciona una hora</option>
+        </select>
+        <div id="sinAtencion" class="warning-msg" style="display:none;">🚫 No hay atención los domingos</div>
+        <div id="cargandoHorarios" class="info-msg" style="display:none;">Cargando horarios disponibles...</div>
+
+        <p class="section-title">Teléfono de contacto (requerido):</p>
+        <input type="tel" name="telefono" id="telefonoInput" 
+               placeholder="Ej: 0991234567" pattern="[0-9]{10}" 
+               title="Debe tener 10 dígitos" inputmode="numeric" required />
+        <div id="telefonoError" class="error-message" style="display:none;">
+          El teléfono debe tener 10 dígitos exactos
+        </div>
+        
+        <div class="form-row">
+          <input type="submit" value="Confirmar cita" id="submitCita" />
+          <button type="button" class="btn-secondary" onclick="cancelarCita()">Cancelar</button>
+        </div>
+      </form>
+
+    {% elif estado == "fin" %}
+      <div class="chat-container card">
+        {% for msg in history %}
+          <div class="message {{ msg.sender }}">
+            {% if msg.sender == 'bot' %}
+              <div class="message-header">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+                <strong>Equilibra:</strong>
+              </div>
+            {% else %}
+              <strong>Tú:</strong>
+            {% endif %}
+            {{ msg.message }}
+          </div>
+        {% endfor %}
+      </div>
+      <form id="resetForm" class="card">
+        <p class="info-msg">Gracias por confiar en Equilibra. Siempre estamos aquí cuando nos necesites.</p>
+        <button type="button" onclick="reiniciarChat()">Nueva conversación</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <script>
+    // ===================== TEMA =====================
+    function setTheme(theme) {
+      document.body.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+      document.querySelector('.toggle-dark').textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+
+    function toggleDarkMode() {
+      const currentTheme = document.body.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      setTheme(newTheme);
+    }
+
+    // Cargar tema guardado o preferencia del sistema
+    const savedTheme = localStorage.getItem('theme');
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme) {
+      setTheme(savedTheme);
+    } else if (systemPrefersDark) {
+      setTheme('dark');
+    }
+
+    // ===================== CHAT =====================
+    function scrollToBottom() {
+      const chatBox = document.getElementById('chatBox');
+      if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    function mostrarEscribiendo() {
+      const indicator = document.getElementById('typingIndicator');
+      if (indicator) {
+        indicator.style.display = 'flex';
+        scrollToBottom();
+      }
+    }
+
+    function ocultarEscribiendo() {
+      const indicator = document.getElementById('typingIndicator');
+      if (indicator) indicator.style.display = 'none';
+    }
+
+    function solicitarCita() {
+      mostrarEscribiendo();
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.innerHTML = '<input type="hidden" name="user_input" value="Quiero agendar una cita">';
+      document.body.appendChild(form);
+      form.submit();
+    }
+
+    // ===================== REINICIAR CHAT =====================
+    async function reiniciarChat() {
+      mostrarEscribiendo();
+      const btn = event.target;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = 'Reiniciando... <span class="loading"></span>';
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch('/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin'
+        });
+        
+        if (!response.ok) throw new Error('Error en la respuesta');
+        window.location.href = '/';
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error al reiniciar. Intenta nuevamente.');
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // ===================== AGENDAR CITA =====================
+    async function cancelarCita() {
+      const btn = event.target;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = 'Cancelando... <span class="loading"></span>';
+      btn.disabled = true;
+      
+      try {
+        const response = await fetch('/cancelar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin'
+        });
+        
+        if (!response.ok) throw new Error('Error en la respuesta');
+        const data = await response.json();
+        window.location.href = data.redirect;
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error al cancelar. Intenta nuevamente.');
+      } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // ===================== HORARIOS =====================
+    const horariosPorDia = {
+      0: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Lunes
+      1: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Martes
+      2: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Miércoles
+      3: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Jueves
+      4: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Viernes
+      5: ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00"],  // Sábado
+      6: []  // Domingo
+    };
+
+    const fechaCitaInput = document.querySelector('input[name="fecha_cita"]');
+    const selectHora = document.querySelector('select[name="hora_cita"]');
+    const sinAtencion = document.getElementById("sinAtencion");
+    const cargandoHorarios = document.getElementById("cargandoHorarios");
+    const citaForm = document.getElementById("citaForm");
+
+    async function verificarDisponibilidad(fecha, hora) {
+      try {
+        const response = await fetch('/verificar-horario', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fecha, hora })
+        });
+        return await response.json();
+      } catch (error) {
+        console.error('Error:', error);
+        return { disponible: false, mensaje: 'Error al verificar' };
+      }
+    }
+
+    async function cargarHorariosDisponibles(fecha) {
+      const fechaObj = new Date(fecha);
+      const dia = fechaObj.getDay();
+
+      selectHora.disabled = true;
+      cargandoHorarios.style.display = "block";
+      sinAtencion.style.display = "none";
+
+      if (dia === 6) {
+        selectHora.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
+        selectHora.disabled = true;
+        sinAtencion.style.display = "block";
+        cargandoHorarios.style.display = "none";
+        return;
+      }
+
+      const opciones = horariosPorDia[dia] || [];
+      let optionsHTML = '<option value="" disabled selected>Selecciona una hora</option>';
+      
+      for (const hora of opciones) {
+        const { disponible } = await verificarDisponibilidad(fecha, hora);
+        if (disponible) {
+          optionsHTML += `<option value="${hora}" class="hora-disponible">${hora} ✔ Disponible</option>`;
+        } else {
+          optionsHTML += `<option value="${hora}" disabled class="hora-ocupada">${hora} ✖ Ocupado</option>`;
+        }
+      }
+      
+      selectHora.innerHTML = optionsHTML;
+      selectHora.disabled = false;
+      cargandoHorarios.style.display = "none";
+    }
+
+    if (fechaCitaInput && selectHora) {
+      fechaCitaInput.addEventListener("change", async function() {
+        if (this.value) await cargarHorariosDisponibles(this.value);
+      });
+
+      fechaCitaInput.addEventListener('input', function() {
+        const fecha = new Date(this.value + 'T00:00');
+        if (fecha.getDay() === 0) {
+          this.value = "";
+          selectHora.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
+          selectHora.disabled = true;
+          sinAtencion.style.display = "block";
+          cargandoHorarios.style.display = "none";
+        }
+      });
+
+      citaForm?.addEventListener('submit', async function(e) {
+        const horaSeleccionada = selectHora.value;
+        if (horaSeleccionada) {
+          const { disponible, mensaje } = await verificarDisponibilidad(
+            fechaCitaInput.value, 
+            horaSeleccionada
+          );
+          
+          if (!disponible) {
+            e.preventDefault();
+            alert(`No se puede agendar: ${mensaje || 'El horario ya está ocupado'}`);
+            await cargarHorariosDisponibles(fechaCitaInput.value);
+          }
+        }
+      });
+
+      if (fechaCitaInput.value) {
+        cargarHorariosDisponibles(fechaCitaInput.value);
+      }
+    }
+
+    // ===================== VALIDACIÓN DE TELÉFONO =====================
+    const telefonoInput = document.getElementById('telefonoInput');
+    const telefonoError = document.getElementById('telefonoError');
+
+    if (telefonoInput) {
+      telefonoInput.addEventListener('input', function() {
+        const valor = this.value.replace(/\D/g, '');
+        this.value = valor;
+        
+        if (valor.length > 0 && valor.length !== 10) {
+          this.classList.add('error');
+          telefonoError.style.display = 'block';
+        } else {
+          this.classList.remove('error');
+          telefonoError.style.display = 'none';
+        }
+      });
+    }
+
+    // Mejorar feedback táctil
+    document.querySelectorAll('button, input[type="submit"], label').forEach(el => {
+      el.addEventListener('touchstart', () => {
+        el.style.transform = 'scale(0.98)';
+      });
+      el.addEventListener('touchend', () => {
+        el.style.transform = 'scale(1)';
+      });
+    });
+
+    // Evitar zoom con doble toque
+    document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+
+    // Ajustar input de fecha en móviles
+    if (window.innerWidth < 600 && document.querySelector('input[name="fecha_cita"]')) {
+      document.querySelector('input[name="fecha_cita"]').type = 'datetime-local';
+    }
+
+    // Ajustar scroll cuando el teclado aparece
+    window.addEventListener('resize', () => {
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+        document.activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+
+    // Mostrar escribiendo al cargar la página si estamos en estado chat
+    if (document.getElementById('typingIndicator')) {
+      scrollToBottom();
+    }
+  </script>
+</body>
+</html>
