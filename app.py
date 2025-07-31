@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, session, redirect, url_for, j
 from datetime import datetime, timedelta
 import os
 import smtplib
+import json 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
@@ -518,11 +519,17 @@ class SistemaConversacional:
 
 # ===================== GOOGLE CALENDAR API =====================
 def get_calendar_service():
-    creds = service_account.Credentials.from_service_account_file(
-        os.getenv("GOOGLE_CALENDAR_CREDENTIALS"),
+    # Obtener el contenido JSON desde la variable de entorno
+    creds_dict = json.loads(os.environ['GOOGLE_CREDENTIALS'])
+    
+    # Crear credenciales desde ese diccionario
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
         scopes=['https://www.googleapis.com/auth/calendar']
     )
+    
     return build('calendar', 'v3', credentials=creds)
+
 
 def crear_evento_calendar(fecha, hora, telefono, sintoma):
     try:
