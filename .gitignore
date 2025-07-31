@@ -1,10 +1,6 @@
 # Ignorar archivos sensibles o innecesarios
-.env
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-*.db
-.DS_Store
-*.log
-*.zip
+.env
+flask_session/
+credentials/

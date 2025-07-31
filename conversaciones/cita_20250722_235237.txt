@@ -1,4 +1,0 @@
-BOT: Registré que tienes culpa desde 2025-07-19. ¿Cómo ha sido esta experiencia para ti?
-USER: Quiero agendar una cita
-BOT: Vamos a agendar tu cita. Por favor completa:
-BOT: ✅ Cita agendada para el 2025-07-26 a las 04:00 PM. Contactaremos al 0985556466 para confirmar.

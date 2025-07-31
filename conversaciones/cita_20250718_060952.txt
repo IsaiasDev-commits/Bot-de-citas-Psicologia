@@ -1,4 +1,0 @@
-BOT: Registré que tienes soledad desde 2025-07-17. ¿Cómo ha sido esta experiencia para ti?
-USER: Quiero agendar una cita
-BOT: Vamos a agendar tu cita. Por favor completa:
-BOT: ✅ Cita agendada para el 2025-07-19 a las 04:00 PM. Contactaremos al 0991764567 para confirmar.

@@ -111,7 +111,7 @@
       padding: var(--space-sm);
     }
 
-    /* Controls */
+    /* Controles */
     .top-controls {
       display: flex;
       justify-content: flex-end;
@@ -226,7 +226,7 @@
       animation: bounce 1.5s infinite ease-in-out;
     }
 
-    /* Forms */
+    /* Formas */
     form {
       background-color: var(--surface);
       padding: var(--space-md);
@@ -262,7 +262,7 @@
       resize: vertical;
     }
 
-    /* Buttons */
+    /* Botones */
     button, input[type="submit"] {
       padding: var(--space-md) var(--space-lg);
       background-color: var(--primary);
@@ -300,14 +300,14 @@
       background-color: rgba(76, 175, 130, 0.1);
     }
 
-    /* Checkbox list */
-    .checkbox-list {
+    /* Radio button list */
+    .radio-list {
       display: flex;
       flex-direction: column;
       gap: var(--space-sm);
     }
 
-    .checkbox-list label {
+    .radio-list label {
       display: flex;
       align-items: center;
       padding: var(--space-sm);
@@ -317,11 +317,11 @@
       min-height: 48px;
     }
 
-    .checkbox-list label:hover {
+    .radio-list label:hover {
       background-color: rgba(76, 175, 130, 0.1);
     }
 
-    .checkbox-list input[type="checkbox"] {
+    .radio-list input[type="radio"] {
       width: 20px;
       height: 20px;
       margin-right: var(--space-sm);
@@ -350,6 +350,14 @@
       margin: var(--space-sm) 0;
     }
 
+    .error-message {
+      color: var(--error);
+      font-size: 0.8rem;
+      display: none;
+      margin-top: -10px;
+      margin-bottom: 10px;
+    }
+
     .form-row {
       display: flex;
       gap: var(--space-md);
@@ -369,6 +377,18 @@
       border-top-color: white;
       animation: spin 1s ease-in-out infinite;
       margin-left: var(--space-sm);
+    }
+
+    /* Animaciones para errores */
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    input.error {
+      border: 2px solid var(--error) !important;
+      animation: shake 0.5s;
     }
 
     /* Responsive */
@@ -457,21 +477,24 @@
     </div>
 
     {% if estado == "inicio" %}
-      <form method="POST" class="card">
-        <div class="checkbox-list">
-          <p class="section-title">¿Cómo te sientes hoy?</p>
+      <form method="POST" class="card" id="sintomasForm">
+        <div class="radio-list">
+          <p class="section-title">¿Cómo te sientes hoy? (Selecciona un síntoma)</p>
           {% for sintoma in sintomas %}
-            <label><input type="checkbox" name="sintomas" value="{{ sintoma }}"> {{ sintoma }}</label>
+            <label>
+              <input type="radio" name="sintomas" value="{{ sintoma }}" required> 
+              {{ sintoma }}
+            </label>
           {% endfor %}
         </div>
         <input type="submit" value="Continuar" />
       </form>
 
-    {% elif estado == "registrar_duracion" %}
+    {% elif estado == "evaluacion" %}
       <div class="chat-container card">
-        {% for msg in history %}
-          <div class="message {{ msg.sender }}">
-            {% if msg.sender == 'bot' %}
+        {% for msg in conversacion.historial %}
+          <div class="message {{ msg.tipo }}">
+            {% if msg.tipo == 'bot' %}
               <div class="message-header">
                 <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
                 <strong>Equilibra:</strong>
@@ -479,22 +502,26 @@
             {% else %}
               <strong>Tú:</strong>
             {% endif %}
-            {{ msg.message }}
+            {{ msg.mensaje }}
           </div>
         {% endfor %}
       </div>
       <form method="POST" class="card">
-        <p class="section-title">¿Desde cuándo experimentas {{ sintoma_actual.lower() }}?</p>
-        <input type="date" name="fecha_inicio_sintoma" min="{{ min_sintoma }}" max="{{ max_sintoma }}" value="{{ hoy }}" required />
+        {% if sintoma_actual %}
+          <p class="section-title">¿Desde cuándo experimentas {{ sintoma_actual.lower() }}?</p>
+        {% else %}
+          <p class="section-title">¿Desde cuándo experimentas estos síntomas?</p>
+        {% endif %}
+        <input type="date" name="fecha_inicio_sintoma" min="{{ fechas_validas.min_sintoma }}" max="{{ fechas_validas.max_sintoma }}" value="{{ fechas_validas.hoy }}" required />
         <p class="info-msg">Selecciona la fecha aproximada cuando comenzó este síntoma</p>
         <input type="submit" value="Continuar" />
       </form>
 
-    {% elif estado == "chat" %}
+    {% elif estado == "profundizacion" or estado == "derivacion" %}
       <div class="chat-container card" id="chatBox">
-        {% for msg in history %}
-          <div class="message {{ msg.sender }}">
-            {% if msg.sender == 'bot' %}
+        {% for msg in conversacion.historial %}
+          <div class="message {{ msg.tipo }}">
+            {% if msg.tipo == 'bot' %}
               <div class="message-header">
                 <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
                 <strong>Equilibra:</strong>
@@ -502,7 +529,7 @@
             {% else %}
               <strong>Tú:</strong>
             {% endif %}
-            {{ msg.message }}
+            {{ msg.mensaje }}
           </div>
         {% endfor %}
         <div id="typingIndicator" class="typing-indicator" style="display: none;">
@@ -524,9 +551,9 @@
 
     {% elif estado == "agendar_cita" %}
       <div class="chat-container card">
-        {% for msg in history %}
-          <div class="message {{ msg.sender }}">
-            {% if msg.sender == 'bot' %}
+        {% for msg in conversacion.historial %}
+          <div class="message {{ msg.tipo }}">
+            {% if msg.tipo == 'bot' %}
               <div class="message-header">
                 <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
                 <strong>Equilibra:</strong>
@@ -534,13 +561,13 @@
             {% else %}
               <strong>Tú:</strong>
             {% endif %}
-            {{ msg.message }}
+            {{ msg.mensaje }}
           </div>
         {% endfor %}
       </div>
       <form method="POST" id="citaForm" class="card">
         <p class="section-title">Selecciona una fecha para tu cita:</p>
-        <input type="date" name="fecha_cita" min="{{ min_cita }}" max="{{ max_cita }}" required />
+        <input type="date" name="fecha_cita" min="{{ fechas_validas.min_cita }}" max="{{ fechas_validas.max_cita }}" required />
 
         <p class="section-title">Selecciona un horario disponible:</p>
         <select name="hora_cita" required disabled>
@@ -551,9 +578,15 @@
 
         <p class="section-title">Teléfono de contacto (requerido):</p>
         <input type="tel" name="telefono" id="telefonoInput" 
-               placeholder="Ej: 0991234567" pattern="[0-9]{10}" 
-               title="Debe tener 10 dígitos" inputmode="numeric" required />
-        <div id="telefonoError" class="error-message" style="display:none;">
+               placeholder="Ej: 0991234567" 
+               pattern="[0-9]{10}" 
+               title="Debe tener 10 dígitos" 
+               inputmode="numeric" 
+               maxlength="10"
+               minlength="10"
+               oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+               required />
+        <div id="telefonoError" class="error-message">
           El teléfono debe tener 10 dígitos exactos
         </div>
         
@@ -565,9 +598,9 @@
 
     {% elif estado == "fin" %}
       <div class="chat-container card">
-        {% for msg in history %}
-          <div class="message {{ msg.sender }}">
-            {% if msg.sender == 'bot' %}
+        {% for msg in conversacion.historial %}
+          <div class="message {{ msg.tipo }}">
+            {% if msg.tipo == 'bot' %}
               <div class="message-header">
                 <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
                 <strong>Equilibra:</strong>
@@ -575,7 +608,7 @@
             {% else %}
               <strong>Tú:</strong>
             {% endif %}
-            {{ msg.message }}
+            {{ msg.mensaje }}
           </div>
         {% endfor %}
       </div>
@@ -800,10 +833,34 @@
         const valor = this.value.replace(/\D/g, '');
         this.value = valor;
         
-        if (valor.length > 0 && valor.length !== 10) {
+        if (valor.length !== 10) {
           this.classList.add('error');
           telefonoError.style.display = 'block';
         } else {
+          this.classList.remove('error');
+          telefonoError.style.display = 'none';
+        }
+      });
+
+      // Validación al enviar el formulario
+      citaForm?.addEventListener('submit', function(e) {
+        if (telefonoInput.value.length !== 10) {
+          e.preventDefault();
+          telefonoInput.classList.add('error');
+          telefonoError.style.display = 'block';
+          telefonoInput.focus();
+        }
+      });
+
+      telefonoInput.addEventListener('focus', function() {
+        if (this.value.length < 10) {
+          this.classList.add('error');
+          telefonoError.style.display = 'block';
+        }
+      });
+
+      telefonoInput.addEventListener('blur', function() {
+        if (this.value.length === 10) {
           this.classList.remove('error');
           telefonoError.style.display = 'none';
         }
@@ -835,10 +892,19 @@
       }
     });
 
-    // Mostrar escribiendo al cargar la página si estamos en estado chat
+    // Mostrar escribiendo al cargar la página 
     if (document.getElementById('typingIndicator')) {
       scrollToBottom();
     }
-  </script>
+
+    // Validación de selección única en síntomas
+    document.getElementById('sintomasForm')?. addEventListener('submit', function(e) {
+      const seleccionado = document.querySelector('input[name="sintomas"]:checked');
+      if (!seleccionado) {
+        e.preventDefault();
+        alert ('Por favor selecciona un síntoma para continuar');
+      }
+    });
+ </script>
 </body>
 </html>

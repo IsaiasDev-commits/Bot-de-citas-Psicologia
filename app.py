@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+import random
 
-# Configuración inicial
+# ===================== CONFIGURACIÓN INICIAL =====================
 load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
@@ -17,7 +18,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY")
 if not os.path.exists("conversaciones"):
     os.makedirs("conversaciones")
 
-# ===================== LISTA DE SÍNTOMAS =====================
+# ===================== DATOS DE SÍNTOMAS =====================
 sintomas_disponibles = [
     "Ansiedad", "Tristeza", "Estrés", "Soledad", "Miedo", "Culpa", "Inseguridad",
     "Enojo", "Agotamiento emocional", "Falta de motivación", "Problemas de sueño",
@@ -28,7 +29,6 @@ sintomas_disponibles = [
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
 
-# Respuestas por síntoma
 respuestas_por_sintoma = {
     "Ansiedad": [
         "Respira profundamente y trata de enfocarte en el presente.",
@@ -490,283 +490,264 @@ respuestas_por_sintoma = {
         "Tú mereces una relación que te aporte tranquilidad y bienestar."
     ]
 }
-
-# Diccionario de palabras clave para cada síntoma
-keywords_por_sintoma = {
-    "Problemas de pareja": ["pareja", "novio", "novia", "esposo", "esposa", "relación", "matrimonio"],
-    "Problemas familiares": ["familia", "padres", "hermanos", "casa", "hogar", "papá", "mamá"],
-    "Ansiedad": ["ansiedad", "nervios", "angustia", "pánico"],
-    "Tristeza": ["tristeza", "deprimido", "desanimado", "desesperanzado"],
-    "Estrés": ["estrés", "presión", "agobiado", "tensión"],
-    "Soledad": ["solo", "soledad", "aislado", "incomprendido"],
-    "Miedo": ["miedo", "temor", "aterrado", "pánico"],
-    "Culpa": ["culpa", "arrepentido", "remordimiento"],
-    "Inseguridad": ["inseguro", "duda", "incertidumbre"],
-    "Enojo": ["enojo", "ira", "enfado", "rabia"],
-    "Agotamiento emocional": ["agotado", "cansancio emocional", "quemado"],
-    "Falta de motivación": ["desmotivado", "sin ganas", "apatía"],
-    "Problemas de sueño": ["insomnio", "no duermo", "sueño interrumpido"],
-    "Dolor corporal": ["dolor", "molestia", "tensión muscular"],
-    "Preocupación excesiva": ["preocupación", "obsesión", "rumiación"],
-    "Cambios de humor": ["altibajos", "cambios de ánimo", "volátil"],
-    "Apatía": ["apatía", "indiferencia", "desinterés"],
-    "Sensación de vacío": ["vacío", "hueco", "sin sentido"],
-    "Pensamientos negativos": ["negatividad", "pesimismo", "derrotista"],
-    "Llanto frecuente": ["llorar", "llanto", "lágrimas"],
-    "Dificultad para concentrarse": ["concentración", "distracción", "enfoque"],
-    "Desesperanza": ["desesperanza", "sin futuro", "pesimismo"],
-    "Tensión muscular": ["tensión", "rigidez", "contractura"],
-    "Taquicardia": ["taquicardia", "corazón acelerado", "palpitaciones"],
-    "Dificultad para respirar": ["falta de aire", "disnea", "ahogo"],
-    "Problemas de alimentación": ["comer", "alimentación", "dieta"],
-    "Pensamientos intrusivos": ["intrusivos", "pensamientos no desead", "obsesivos"]
-}
-
-# ===================== FUNCIÓN PARA MANTENER CONTEXTO =====================
-def obtener_respuesta_coherente(user_input, sintomas_seleccionados, conversacion):
-    # Paso 1: Detectar el síntoma activo basado en palabras clave
-    sintoma_activo = None
-    for sintoma, keywords in keywords_por_sintoma.items():
-        if any(keyword in user_input.lower() for keyword in keywords):
-            sintoma_activo = sintoma
-            break
+# ===================== SISTEMA CONVERSACIONAL =====================
+class SistemaConversacional:
+    def __init__(self):
+        self.historial = []
     
-    # Paso 2: Si no se detectó, usar el último síntoma mencionado
-    if not sintoma_activo:
-        for msg in reversed(conversacion):
-            if msg["sender"] == "user":
-                for sintoma in sintomas_seleccionados:
-                    if sintoma.lower() in msg["message"].lower():
-                        sintoma_activo = sintoma
-                        break
+    def obtener_respuesta(self, sintoma, contexto):
+        respuestas = ["¿Puedes contarme más sobre cómo te sientes?"]  # Respuesta genérica
+        return random.choice(respuestas)
     
-    # Paso 3: Obtener respuesta coherente
-    if sintoma_activo and sintoma_activo in respuestas_por_sintoma:
-        respuestas = respuestas_por_sintoma[sintoma_activo]
-        mensajes_bot = [msg["message"] for msg in conversacion if msg["sender"] == "bot"]
-        # Evitar repetir la misma respuesta
-        respuesta = next((r for r in respuestas if r not in mensajes_bot), respuestas[0])
-        return respuesta
+    def agregar_interaccion(self, tipo, mensaje, sintoma=None):
+        self.historial.append({
+            'tipo': tipo,
+            'mensaje': mensaje,
+            'sintoma': sintoma,
+            'timestamp': datetime.now().isoformat()
+        })
     
-    return None  # Si no hay contexto claro
+    def __repr__(self):
+        return f"SistemaConversacional(historial={self.historial})"
+    
+    def __getstate__(self):
+        return {'historial': self.historial}
+    
+    def __setstate__(self, state):
+        self.historial = state['historial']
 
-# ===================== CONFIGURACIÓN GOOGLE CALENDAR =====================
-SCOPES = ['https://www.googleapis.com/auth/calendar']
-SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_CALENDAR_CREDENTIALS")
-
+# ===================== GOOGLE CALENDAR API =====================
 def get_calendar_service():
     creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+        os.getenv("GOOGLE_CALENDAR_CREDENTIALS"),
+        scopes=['https://www.googleapis.com/auth/calendar']
     )
     return build('calendar', 'v3', credentials=creds)
 
-def verificar_disponibilidad(fecha, hora):
-    try:
-        service = get_calendar_service()
-        start_time = f"{fecha}T{hora}:00-05:00"
-        end_time = f"{fecha}T{int(hora.split(':')[0]) + 1}:00:00-05:00"
-
-        eventos = service.events().list(
-            calendarId='primary',
-            timeMin=start_time,
-            timeMax=end_time,
-            singleEvents=True
-        ).execute()
-
-        return len(eventos.get('items', [])) == 0
-
-    except HttpError as error:
-        print(f"Error al verificar disponibilidad: {error}")
-        return False
-
-def crear_evento_calendar(fecha, hora, descripcion="Cita psicológica"):
+def crear_evento_calendar(fecha, hora, telefono, sintoma):
     try:
         service = get_calendar_service()
         event = {
-            'summary': descripcion,
-            'start': {'dateTime': f"{fecha}T{hora}:00-05:00", 'timeZone': 'America/Guayaquil'},
-            'end': {'dateTime': f"{fecha}T{int(hora.split(':')[0]) + 1}:00:00-05:00", 'timeZone': 'America/Guayaquil'},
-            'description': 'Cita agendada a través del sistema Equilibra'
+            'summary': f'Cita psicológica - {sintoma}',
+            'description': f'Teléfono: {telefono}\nSíntoma: {sintoma}',
+            'start': {
+                'dateTime': f"{fecha}T{hora}:00-05:00",
+                'timeZone': 'America/Guayaquil',
+            },
+            'end': {
+                'dateTime': f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00",
+                'timeZone': 'America/Guayaquil',
+            },
         }
-
-        event = service.events().insert(calendarId='primary', body=event).execute()
-        return True
+        event = service.events().insert(
+            calendarId='primary',
+            body=event
+        ).execute()
+        return event.get('htmlLink')
     except HttpError as error:
         print(f"Error al crear evento: {error}")
-        return False
+        return None
 
-# ===================== FUNCIONES AUXILIARES =====================
-def get_fechas_validas():
-    hoy = datetime.now()
-    return {
-        'hoy': hoy.strftime('%Y-%m-%d'),
-        'min_cita': hoy.strftime('%Y-%m-%d'),
-        'max_cita': (hoy + timedelta(days=30)).strftime('%Y-%m-%d'),
-        'min_sintoma': (hoy - timedelta(days=365*5)).strftime('%Y-%m-%d'),
-        'max_sintoma': hoy.strftime('%Y-%m-%d')
-    }
-
-def enviar_correo(destinatario, asunto, cuerpo):
+# ===================== FUNCIÓN DE CORREO =====================
+def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
     remitente = os.getenv("EMAIL_USER")
-    contraseña = os.getenv("EMAIL_PASSWORD")
-
-    if not remitente or not contraseña:
-        print("❌ Error: Credenciales de email no configuradas")
-        return False
-
-    msg = MIMEMultipart()
-    msg['From'] = remitente
-    msg['To'] = destinatario
-    msg['Subject'] = asunto
-    msg.attach(MIMEText(cuerpo, 'plain', 'utf-8'))
-
+    password = os.getenv("EMAIL_PASSWORD")
+    
+    mensaje = MIMEMultipart()
+    mensaje['From'] = remitente
+    mensaje['To'] = destinatario
+    mensaje['Subject'] = f"Nueva cita presencial agendada - {fecha} {hora}"
+    
+    cuerpo = f"""
+    📅 Nueva cita presencial agendada:
+    Fecha: {fecha}
+    Hora: {hora}
+    Teléfono: {telefono}
+    Síntoma principal: {sintoma}
+    
+    El paciente será contactado para confirmar cita.
+    """
+    mensaje.attach(MIMEText(cuerpo, 'plain'))
+    
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as servidor:
-            servidor.login(remitente, contraseña)
-            servidor.send_message(msg)
-        print("✅ Correo enviado con éxito.")
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(remitente, password)
+            server.send_message(mensaje)
         return True
     except Exception as e:
-        print(f"❌ Error al enviar correo: {e}")
+        print(f"Error enviando correo: {e}")
         return False
 
+# ===================== FUNCIONES DE UTILIDAD =====================
+def calcular_duracion_dias(fecha_str):
+    if not fecha_str:
+        return 0
+    fecha_inicio = datetime.strptime(fecha_str, "%Y-%m-%d")
+    return (datetime.now() - fecha_inicio).days
+
+def necesita_profesional(sintoma, duracion_dias, historial):
+    if duracion_dias > 30:
+        return True
+    if any(palabra in historial[-1]['mensaje'].lower() for palabra in ["suicidio", "autoflagelo", "no puedo más"]):
+        return True
+    return False
+
+# ===================== RUTAS PRINCIPALES =====================
 @app.route("/", methods=["GET", "POST"])
 def index():
-    # Inicialización de la sesión
-    if "estado" not in session:
+    conversacion = SistemaConversacional()
+    
+    if "conversacion_historial" not in session:
         session.clear()
         session.update({
             "estado": "inicio",
-            "sintomas_seleccionados": [],
-            "conversacion": [],
-            "duracion_sintomas": {},
-            "fechas_validas": get_fechas_validas()
+            "sintoma_actual": None,
+            "duracion_sintoma": None,
+            "fechas_validas": {
+                'hoy': datetime.now().strftime('%Y-%m-%d'),
+                'min_cita': datetime.now().strftime('%Y-%m-%d'),
+                'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
+                'min_sintoma': (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d'),
+                'max_sintoma': datetime.now().strftime('%Y-%m-%d')
+            },
+            "conversacion_historial": []
         })
+    else:
+        conversacion.historial = session["conversacion_historial"]
 
-    # Manejo de POST requests
     if request.method == "POST":
-        if session["estado"] == "inicio":
-            if seleccionados := request.form.getlist("sintomas"):
-                session["sintomas_seleccionados"] = seleccionados
-                session["estado"] = "registrar_duracion"
-                session["sintoma_actual"] = seleccionados[0]
-            return redirect(url_for("index"))
+        estado_actual = session["estado"]
 
-        elif session["estado"] == "registrar_duracion":
+        if estado_actual == "inicio":
+            if sintomas := request.form.getlist("sintomas"):
+                session["sintoma_actual"] = sintomas[0]
+                session["estado"] = "evaluacion"
+                conversacion.agregar_interaccion('bot', f"Entiendo que estás experimentando {sintomas[0].lower()}. ¿Desde cuándo lo notas?", sintomas[0])
+
+        elif estado_actual == "evaluacion":
             if fecha := request.form.get("fecha_inicio_sintoma"):
-                sintoma = session["sintoma_actual"]
-                session["duracion_sintomas"][sintoma] = fecha
-                session["estado"] = "chat"
-                session["conversacion"].append({
-                    "sender": "bot", 
-                    "message": f"Registré que tienes {sintoma.lower()} desde {fecha}. ¿Cómo ha sido esta experiencia?"
-                })
-            return redirect(url_for("index"))
+                session["duracion_sintoma"] = calcular_duracion_dias(fecha)
+                session["estado"] = "profundizacion"
+                
+                diferencia = (datetime.now() - datetime.strptime(fecha, "%Y-%m-%d")).days
+                if diferencia < 30:
+                    comentario = "Es bueno que lo identifiques temprano."
+                elif diferencia < 365:
+                    comentario = "Varios meses con esto... debe ser difícil."
+                else:
+                    comentario = "Tu perseverancia es admirable."
+                
+                respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], {})
+                conversacion.agregar_interaccion('bot', f"{comentario} {respuesta}", session["sintoma_actual"])
 
-        elif session["estado"] == "chat":
+        elif estado_actual == "profundizacion":
             if user_input := request.form.get("user_input", "").strip():
-                session["conversacion"].append({"sender": "user", "message": user_input})
+                conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                # --- MEJORA CLAVE AQUÍ ---
-                respuesta_coherente = obtener_respuesta_coherente(
-                    user_input, 
-                    session["sintomas_seleccionados"], 
-                    session["conversacion"]
-                )
-                
-                if respuesta_coherente:
-                    session["conversacion"].append({"sender": "bot", "message": respuesta_coherente})
-                elif any(p in user_input.lower() for p in ["cita", "consultar", "doctor", "psicólogo"]):
-                    session["estado"] = "agendar_cita"
-                    session["conversacion"].append({
-                        "sender": "bot", 
-                        "message": "Vamos a agendar tu cita. Por favor completa:"
-                    })
-            return redirect(url_for("index"))
+                if any(palabra in user_input.lower() for palabra in ["cita", "agendar", "doctor"]):
+                    session["estado"] = "derivacion"
+                    conversacion.agregar_interaccion('bot', "Creo que sería bueno que hables con un profesional. ¿Quieres que te ayude a agendar una cita presencial? Un psicólogo se comunicará contigo para confirmar los detalles.", session["sintoma_actual"])
+                elif necesita_profesional(session["sintoma_actual"], session["duracion_sintoma"], conversacion.historial):
+                    session["estado"] = "derivacion"
+                    conversacion.agregar_interaccion('bot', "Creo que sería bueno que hables con un profesional. ¿Quieres que te ayude a agendar una cita presencial? Un psicólogo se comunicará contigo para confirmar los detalles.", session["sintoma_actual"])
+                else:
+                    respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], {})
+                    conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
 
-        elif session["estado"] == "agendar_cita":
+        elif estado_actual == "derivacion":
+            if user_input := request.form.get("user_input", "").strip():
+                conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
+                if any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita"]):
+                    session["estado"] = "agendar_cita"
+                    mensaje = (
+                        "Gracias por confiar en nosotros. Tu cita será de manera presencial. "
+                        "Un psicólogo se comunicará contigo para confirmar los detalles y la ubicación exacta. "
+                        "Por favor completa los datos:"
+                    )
+                    conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
+                else:
+                    conversacion.agregar_interaccion('bot', "Entiendo. ¿Quieres seguir hablando de esto o prefieres cambiar de tema?", session["sintoma_actual"])
+
+        elif estado_actual == "agendar_cita":
             if fecha := request.form.get("fecha_cita"):
+                telefono = request.form.get("telefono", "").strip()
+
+                # Validación del teléfono
+                if len(telefono) != 10 or not telefono.isdigit():
+                    conversacion.agregar_interaccion('bot', "⚠️ El teléfono debe tener 10 dígitos numéricos. Por favor, ingrésalo de nuevo.", None)
+                    session["conversacion_historial"] = conversacion.historial
+                    return redirect(url_for("index"))
+
                 cita = {
                     "fecha": fecha,
                     "hora": request.form.get("hora_cita"),
-                    "telefono": request.form.get("telefono", "").strip()
+                    "telefono": telefono
                 }
 
                 if not cita["hora"]:
-                    session["conversacion"].append({
-                        "sender": "bot", 
-                        "message": "Por favor selecciona una hora válida."
-                    })
+                    conversacion.agregar_interaccion('bot', "⚠️ Selecciona una hora válida", None)
                 else:
-                    # Verificar disponibilidad
-                    if not verificar_disponibilidad(cita["fecha"], cita["hora"]):
-                        session["conversacion"].append({
-                            "sender": "bot", 
-                            "message": "🚫 El horario ya está ocupado. Por favor elige otro."
-                        })
-                    else:
-                        # Crear evento en Google Calendar
-                        if crear_evento_calendar(cita["fecha"], cita["hora"]):
-                            # Enviar email al psicólogo
-                            cuerpo_email = f"""
-                            📋 Nueva cita agendada:
+                    evento_url = crear_evento_calendar(
+                        cita["fecha"],
+                        cita["hora"],
+                        cita["telefono"],
+                        session["sintoma_actual"]
+                    )
 
-                            • Fecha: {cita['fecha']}
-                            • Hora: {cita['hora']}
-                            • Teléfono: {cita['telefono'] or 'No proporcionado'}
-
-                            Síntomas reportados:
-                            - {", ".join(session['sintomas_seleccionados'])}
-                            """
-                            
-                            if enviar_correo(
-                                os.getenv("PSICOLOGO_EMAIL"),
-                                f"📅 Nueva cita: {cita['fecha']} {cita['hora']}",
-                                cuerpo_email
-                            ):
-                                confirmacion = f"""
-                                ✅ Solicitud recibida para el {cita['fecha']} a las {cita['hora']}.
-                                El psicólogo te contactará al número proporcionado.
-                                """
-                            else:
-                                confirmacion = "✅ Solicitud recibida. (Error al notificar al psicólogo, pero se guardó tu cita)"
-                                
-                            session["conversacion"].append({"sender": "bot", "message": confirmacion})
-                            session["estado"] = "fin"
+                    if evento_url:
+                        if enviar_correo_confirmacion(
+                            os.getenv("PSICOLOGO_EMAIL"),
+                            cita["fecha"],
+                            cita["hora"],
+                            cita["telefono"],
+                            session["sintoma_actual"]
+                        ):
+                            mensaje = (
+                                f"✅ Cita presencial confirmada para {cita['fecha']} a las {cita['hora']}. "
+                                "Recibirás una llamada para cordinar su consulta . "
+                                "¡Gracias por confiar en nosotros!"
+                            )
                         else:
-                            session["conversacion"].append({
-                                "sender": "bot", 
-                                "message": "❌ Error al agendar. Por favor intenta nuevamente."
-                            })
-                return redirect(url_for("index"))
+                            mensaje = f"✅ Cita registrada (pero error al notificar al profesional)"
 
-    # Renderizar template
+                        conversacion.agregar_interaccion('bot', mensaje, None)
+                        session["estado"] = "fin"
+                    else:
+                        conversacion.agregar_interaccion('bot', "❌ Error al agendar. Intenta nuevamente", None)
+
+        session["conversacion_historial"] = conversacion.historial
+        return redirect(url_for("index"))
+
+    session["conversacion_historial"] = conversacion.historial
     return render_template(
         "index.html",
         estado=session["estado"],
         sintomas=sintomas_disponibles,
-        history=session["conversacion"],
+        conversacion=conversacion,
         sintoma_actual=session.get("sintoma_actual"),
-        **session["fechas_validas"]
+        fechas_validas=session["fechas_validas"]
     )
 
 # ===================== RUTAS ADICIONALES =====================
 @app.route("/reset", methods=["POST"])
-def reset_session():
+def reset():
     session.clear()
     return jsonify({"status": "success"})
-
-@app.route("/cancelar", methods=["POST"])
-def cancelar_cita():
-    if "estado" in session and session["estado"] == "agendar_cita":
-        session["estado"] = "chat"
-    return jsonify({"redirect": url_for("index")})
 
 @app.route("/verificar-horario", methods=["POST"])
 def verificar_horario():
     data = request.get_json()
-    disponible = verificar_disponibilidad(data["fecha"], data["hora"])
-    return jsonify({"disponible": disponible, "mensaje": "Disponible" if disponible else "Horario ocupado"})
+    try:
+        service = get_calendar_service()
+        eventos = service.events().list(
+            calendarId='primary',
+            timeMin=f"{data['fecha']}T{data['hora']}:00-05:00",
+            timeMax=f"{data['fecha']}T{int(data['hora'].split(':')[0])+1}:00:00-05:00",
+            singleEvents=True
+        ).execute()
+        return jsonify({"disponible": len(eventos.get('items', [])) == 0})
+    except HttpError as error:
+        return jsonify({"error": str(error)}), 500
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
