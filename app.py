@@ -445,49 +445,51 @@ respuestas_por_sintoma = {
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
-        self.contador_seguir = 0
-        self.ultimas_respuestas = []
+        self.contador_respuestas = 0
+        self.contexto_emocional = None
     
-    def obtener_respuesta(self, sintoma, contexto):
-        # Esta función ahora es más inteligente para evitar bucles
-        if self.contador_seguir >= 2:
-            self.contador_seguir = 0
+    def analizar_respuesta(self, texto):
+        """Analiza la respuesta del usuario para determinar contexto emocional"""
+        texto = texto.lower()
+        if any(palabra in texto for palabra in ["complicado", "difícil", "duro"]):
+            self.contexto_emocional = "frustracion"
+            return "Parece que estás pasando por un momento difícil. ¿Qué hace esta situación especialmente complicada para ti?"
+        
+        elif any(palabra in texto for palabra in ["mal", "horrible", "terrible"]):
+            self.contexto_emocional = "angustia"
+            return "Lamento que te sientas así. ¿Hay algo específico que esté contribuyendo a este sentimiento?"
+        
+        elif "sensación" in texto:
+            return "Las sensaciones pueden ser difíciles de describir. ¿Dónde sientes eso en tu cuerpo?"
+        
+        return None
+    
+    def obtener_respuesta(self, sintoma, user_input):
+        # Primero intentar análisis contextual
+        respuesta_analizada = self.analizar_respuesta(user_input)
+        if respuesta_analizada:
+            self.contador_respuestas = 0
+            return respuesta_analizada
+        
+        # Lógica para evitar repeticiones
+        self.contador_respuestas += 1
+        
+        if self.contador_respuestas >= 2:
+            self.contador_respuestas = 0
             return random.choice([
-                f"Veo que quieres profundizar en {sintoma.lower()}. ¿Hay algo específico que te gustaría discutir?",
-                "¿Te ayudaría si comparto algunas estrategias prácticas para manejar esto?",
-                "Parece que esto es importante para ti. ¿Quieres que exploremos más a fondo?"
+                f"Veo que es difícil hablar de {sintoma.lower()}. ¿Quieres que abordemos esto de otra manera?",
+                "Quizás podamos enfocarnos en cómo te gustaría sentirte en lugar de cómo te sientes ahora.",
+                "¿Te ayudaría si hablamos de estrategias para manejar esta situación?"
             ])
         
-        # Respuesta genérica si no hay respuestas específicas para el síntoma
-        return random.choice([
-            "¿Puedes contarme más sobre cómo te sientes?",
-            "¿Cómo te afecta esto en tu día a día?",
-            "¿Qué pensamientos pasan por tu mente cuando esto ocurre?"
-        ])
-    
-    def agregar_interaccion(self, tipo, mensaje, sintoma=None):
-        if tipo == 'user':
-            if "seguir" in mensaje.lower():
-                self.contador_seguir += 1
-            elif "cambiar" in mensaje.lower():
-                self.contador_seguir = 0
-        
-        self.historial.append({
-            'tipo': tipo,
-            'mensaje': mensaje,
-            'sintoma': sintoma,
-            'timestamp': datetime.now().isoformat()
-        })
-    
-    def __repr__(self):
-        return f"SistemaConversacional(historial={self.historial})"
-    
-    def __getstate__(self):
-        return {'historial': self.historial}
-    
-    def __setstate__(self, state):
-        self.historial = state['historial']
-
+        # Respuestas variadas
+        opciones = [
+            "¿Qué pensamientos suelen acompañar esta sensación?",
+            "¿Hay momentos en que esto se siente menos intenso?",
+            "¿Cómo afecta esto tu vida diaria?",
+            "Si tuvieras que describir esta sensación con una metáfora, ¿cuál sería?"
+        ]
+        return random.choice(opciones)
 # ===================== FUNCIONES DE CALENDARIO =====================
 def get_calendar_service():
     creds_dict = json.loads(os.environ['GOOGLE_CREDENTIALS'])
