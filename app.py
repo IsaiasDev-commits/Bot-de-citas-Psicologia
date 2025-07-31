@@ -445,51 +445,54 @@ respuestas_por_sintoma = {
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
-        self.contador_respuestas = 0
-        self.contexto_emocional = None
-    
-    def analizar_respuesta(self, texto):
-        """Analiza la respuesta del usuario para determinar contexto emocional"""
-        texto = texto.lower()
-        if any(palabra in texto for palabra in ["complicado", "difícil", "duro"]):
-            self.contexto_emocional = "frustracion"
-            return "Parece que estás pasando por un momento difícil. ¿Qué hace esta situación especialmente complicada para ti?"
-        
-        elif any(palabra in texto for palabra in ["mal", "horrible", "terrible"]):
-            self.contexto_emocional = "angustia"
-            return "Lamento que te sientas así. ¿Hay algo específico que esté contribuyendo a este sentimiento?"
-        
-        elif "sensación" in texto:
-            return "Las sensaciones pueden ser difíciles de describir. ¿Dónde sientes eso en tu cuerpo?"
-        
-        return None
-    
-    def obtener_respuesta(self, sintoma, user_input):
-        # Primero intentar análisis contextual
-        respuesta_analizada = self.analizar_respuesta(user_input)
-        if respuesta_analizada:
-            self.contador_respuestas = 0
-            return respuesta_analizada
-        
-        # Lógica para evitar repeticiones
-        self.contador_respuestas += 1
-        
-        if self.contador_respuestas >= 2:
-            self.contador_respuestas = 0
-            return random.choice([
-                f"Veo que es difícil hablar de {sintoma.lower()}. ¿Quieres que abordemos esto de otra manera?",
-                "Quizás podamos enfocarnos en cómo te gustaría sentirte en lugar de cómo te sientes ahora.",
-                "¿Te ayudaría si hablamos de estrategias para manejar esta situación?"
-            ])
-        
-        # Respuestas variadas
-        opciones = [
-            "¿Qué pensamientos suelen acompañar esta sensación?",
-            "¿Hay momentos en que esto se siente menos intenso?",
-            "¿Cómo afecta esto tu vida diaria?",
-            "Si tuvieras que describir esta sensación con una metáfora, ¿cuál sería?"
+        self.respuestas_usadas = []  # Registro de respuestas ya utilizadas
+        self.contexto_actual = None
+
+    def obtener_respuesta_unica(self, sintoma):
+        """Obtiene una respuesta no utilizada para el síntoma"""
+        respuestas_disponibles = [
+            r for r in respuestas_por_sintoma.get(sintoma, []) 
+            if r not in self.respuestas_usadas
         ]
-        return random.choice(opciones)
+        
+        # Si ya usamos todas, reiniciamos el registro
+        if not respuestas_disponibles:
+            self.respuestas_usadas = []
+            respuestas_disponibles = respuestas_por_sintoma.get(sintoma, [])
+        
+        # Seleccionar una respuesta al azar
+        if respuestas_disponibles:
+            respuesta = random.choice(respuestas_disponibles)
+            self.respuestas_usadas.append(respuesta)
+            return respuesta
+        else:
+            return "¿Puedes contarme más sobre cómo te sientes?"
+
+    def analizar_contexto(self, user_input):
+        """Detecta palabras clave para enriquecer el diálogo"""
+        user_input = user_input.lower()
+        if any(palabra in user_input for palabra in ["tranquilo", "tranquilidad"]):
+            return "Entiendo que buscas tranquilidad. ¿Qué suele ayudarte a encontrar calma?"
+        elif any(palabra in user_input for palabra in ["vida", "normalmente"]):
+            return "Cuando dices que afecta tu vida normalmente, ¿en qué actividades concretas lo notas más?"
+        return None
+
+    def obtener_respuesta(self, sintoma, user_input):
+        # 1. Primero intentar análisis contextual
+        respuesta_contextual = self.analizar_contexto(user_input)
+        if respuesta_contextual:
+            return respuesta_contextual
+        
+        # 2. Usar el diccionario de respuestas por síntoma (sin repeticiones)
+        return self.obtener_respuesta_unica(sintoma)
+
+    def agregar_interaccion(self, tipo, mensaje, sintoma=None):
+        self.historial.append({
+            'tipo': tipo,
+            'mensaje': mensaje,
+            'sintoma': sintoma,
+            'timestamp': datetime.now().strftime("%H:%M:%S")
+        })
 # ===================== FUNCIONES DE CALENDARIO =====================
 def get_calendar_service():
     creds_dict = json.loads(os.environ['GOOGLE_CREDENTIALS'])
