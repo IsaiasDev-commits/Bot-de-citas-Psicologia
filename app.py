@@ -470,6 +470,9 @@ class SistemaConversacional:
 
     def analizar_contexto(self, user_input):
         """Detecta palabras clave para enriquecer el diálogo"""
+        if not isinstance(user_input, str):
+            return None  # Prevenir error si user_input no es string
+
         user_input = user_input.lower()
         if any(palabra in user_input for palabra in ["tranquilo", "tranquilidad"]):
             return "Entiendo que buscas tranquilidad. ¿Qué suele ayudarte a encontrar calma?"
@@ -493,6 +496,7 @@ class SistemaConversacional:
             'sintoma': sintoma,
             'timestamp': datetime.now().strftime("%H:%M:%S")
         })
+
 # ===================== FUNCIONES DE CALENDARIO =====================
 def get_calendar_service():
     creds_dict = json.loads(os.environ['GOOGLE_CREDENTIALS'])
@@ -615,7 +619,7 @@ def index():
                 else:
                     comentario = "Tu perseverancia es admirable."
                 
-                respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], {})
+                respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], "")
                 conversacion.agregar_interaccion('bot', f"{comentario} {respuesta}", session["sintoma_actual"])
 
         elif estado_actual == "profundizacion":
@@ -734,4 +738,4 @@ def verificar_horario():
         return jsonify({"error": str(error)}), 500
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
