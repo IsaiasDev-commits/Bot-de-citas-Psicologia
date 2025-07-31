@@ -31,107 +31,77 @@ sintomas_disponibles = [
 ]
 
 respuestas_por_sintoma = {
-    "Ansiedad": [
-        "Respira profundamente y trata de enfocarte en el presente.",
-        "¿Puedes identificar qué situaciones te generan más ansiedad?",
-        "Hablar de tus miedos puede ayudarte a reducir su peso.",
-        "¿Sientes que la ansiedad afecta tu cuerpo o solo tu mente?",
-        "Intenta dar pequeños pasos para enfrentar lo que te preocupa.",
-        "¿Has probado técnicas como la meditación o ejercicios de relajación?",
-        "A veces, compartir lo que sientes puede aliviar la carga.",
-        "¿Hay algo que te haga sentir más tranquilo momentáneamente?",
-        "Recuerda que es normal tener altibajos en este proceso.",
-        "¿Puedes contarme cuándo comenzó esta sensación de ansiedad?",
-        "Mantener una rutina puede ayudar a manejar la ansiedad.",
-        "¿Tienes apoyo cercano con quien puedas hablar sobre esto?",
-        "Es importante reconocer los avances, por pequeños que sean.",
-        "¿Hay pensamientos recurrentes que aumentan tu ansiedad?",
-        "Si la ansiedad persiste, buscar ayuda profesional es recomendable."
+     "Ansiedad": [
+         "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
+        "Cuando sientes ansiedad, ¿qué técnicas has probado para calmarte?",
+        "¿Notas que la ansiedad afecta tu cuerpo (ej. taquicardia, sudoración)?",
+        "Vamos a respirar juntos: inhala por 4 segundos, exhala por 6. ¿Te ayuda?",
+        "¿Hay algo que solía relajarte y ahora ya no funciona?",
+        "¿Sientes síntomas como opresión en el pecho o dificultad para respirar?",
+        "Tu cuerpo también habla cuando tu mente está saturada, escúchalo sin juzgar.",
+        "A veces, lo que más ayuda es hablar sin miedo a ser juzgado.",
+        "No necesitas resolver todo hoy. ¿Qué necesitas en este momento?",
+        "¿Qué pensamientos suelen venir justo antes de que inicie la ansiedad?"
     ],
     "Tristeza": [
-        "Sentir tristeza es parte de la experiencia humana, está bien.",
-        "¿Quieres contarme qué cosas te hacen sentir así?",
-        "A veces, llorar puede ser una forma de liberar emociones.",
-        "¿Has notado si hay momentos del día en que te sientes peor?",
-        "La tristeza puede afectar tu energía, date permiso para descansar.",
-        "¿Tienes alguien con quien puedas compartir lo que sientes?",
-        "¿Hay actividades que antes disfrutabas y ahora no tanto?",
-        "Hablar puede ser un primer paso para empezar a sanar.",
-        "¿Qué cosas pequeñas te ayudan a sentir un poco mejor?",
-        "Reconocer la tristeza es el primer paso para manejarla.",
-        "¿Sientes que esta tristeza te impide hacer cosas importantes?",
-        "Es válido buscar ayuda para atravesar momentos difíciles.",
-        "¿Qué te gustaría cambiar para sentirte un poco mejor?",
-        "¿Has tenido pensamientos negativos sobre ti mismo últimamente?",
-        "Recuerda que no estás solo y que esto puede mejorar con apoyo."
+         "Sentir tristeza no significa debilidad. Es una señal de que algo importa.",
+        "¿Qué eventos recientes han influido en tu estado de ánimo?",
+        "Permítete sentir. Reprimir emociones no las hace desaparecer.",
+        "¿Te has dado permiso para descansar o simplemente estar contigo?",
+        "¿Hay música, recuerdos o espacios que antes te aliviaban?",
+        "Es posible que tu cuerpo también necesite descanso emocional.",
+        "¿Cómo expresarías tu tristeza si fuera una historia o una imagen?",
+        "Estás haciendo lo mejor que puedes. Validar eso ya es un paso enorme.",
+        "¿Has probado escribir lo que sientes, sin filtros ni juicios?",
+        "Estoy contigo en esto. ¿Qué necesitarías hoy para sentirte un poco mejor?"
     ],
      "Estrés": [
-        "El estrés puede acumularse, es importante encontrar momentos para relajarte.",
-        "¿Qué situaciones sientes que te generan más estrés?",
-        "Probar ejercicios de respiración puede ayudarte a calmarte.",
-        "¿Sientes tensión física cuando estás estresado?",
-        "Hablar sobre lo que te preocupa puede aliviar la carga mental.",
-        "¿Has intentado organizar tu tiempo para reducir el estrés?",
-        "A veces es útil tomar pausas cortas durante el día.",
-        "¿Qué actividades disfrutas que te ayuden a desconectar?",
-        "¿Tienes alguien de confianza con quien puedas hablar?",
-        "Reconocer el estrés es importante para poder manejarlo.",
-        "¿Cómo afecta el estrés tu estado de ánimo o tus relaciones?",
-        "Buscar apoyo puede facilitar encontrar soluciones.",
-        "¿Has probado técnicas de relajación o mindfulness?",
-        "Es bueno que estés buscando formas de cuidarte.",
-        "Si el estrés es muy intenso, considera consultar con un especialista."
+       "¿Notas si el estrés aparece más en ciertos momentos del día?",
+        "A veces, solo detenerse y respirar ya es una forma de cuidarse.",
+        "¿Te estás exigiendo demasiado últimamente?",
+        "El estrés también habla de tus límites. ¿Puedes identificar alguno que fue cruzado?",
+        "Probar técnicas breves como estiramientos, música relajante o caminar puede ayudar.",
+        "¿Te has permitido no ser productivo un día sin sentir culpa?",
+        "Es posible organizar el caos en partes pequeñas. ¿Te ayudo a descomponerlo?",
+        "¿Tu cuerpo ha mostrado señales físicas de ese estrés (dolores, rigidez)?",
+        "Darte un espacio para ti es un acto necesario, no egoísta.",
+        "Tomarte pausas no es perder tiempo; es cuidar tu salud emocional."
     ],
     "Soledad": [
-        "Sentirse solo puede ser muy difícil, es bueno que lo expreses.",
-        "¿Hay momentos o lugares donde te sientas más acompañado?",
-        "Buscar actividades grupales puede ayudar a conectar con otros.",
-        "¿Tienes algún amigo o familiar con quien puedas hablar?",
-        "La soledad no siempre significa estar físicamente solo.",
-        "¿Qué te gustaría que cambiara para sentirte mejor socialmente?",
-        "Compartir tus sentimientos es un buen paso para aliviar la soledad.",
-        "¿Hay cosas que disfrutas hacer aunque sea solo?",
-        "Conectar con otros puede tomar tiempo, sé paciente contigo.",
-        "¿Sientes miedo o inseguridad al acercarte a los demás?",
-        "Es importante cuidar tu bienestar emocional en este proceso.",
-        "¿Has intentado actividades nuevas para conocer gente?",
-        "A veces, expresar lo que sientes ayuda a aliviar la carga.",
-        "Recuerda que mereces compañía y apoyo.",
-        "Si la soledad persiste, buscar ayuda puede ser beneficioso."
+        "La soledad puede sentirse como un vacío difícil de explicar. Gracias por compartirlo.",
+        "¿Qué tipo de compañía sientes que necesitas: emocional, física, espiritual?",
+        "¿Hay alguna actividad que te conecte contigo y te haga sentir menos solo?",
+        "¿Has considerado escribirle a alguien con quien no hablas hace tiempo?",
+        "Conectar con otros lleva tiempo, y está bien tomarse ese proceso con calma.",
+        "¿Te gustaría imaginar cómo sería un vínculo que te dé contención?",
+        "A veces estar acompañado por alguien no significa dejar de sentir soledad. ¿Lo has sentido?",
+        "¿Qué podrías hacer hoy que te haga sentir parte de algo, aunque sea pequeño?",
+        "¿Hay alguna comunidad o espacio que quisieras explorar?",
+        "Recuerda que mereces sentirte valorado y escuchado."
     ],
     "Miedo": [
-        "El miedo es una emoción natural, hablar de él puede ayudar.",
-        "¿Puedes identificar qué te causa miedo específicamente?",
-        "¿Cómo reaccionas cuando sientes ese miedo?",
-        "Enfrentar poco a poco los miedos puede disminuir su poder.",
-        "¿Has intentado alguna técnica para relajarte en esos momentos?",
-        "Compartir tus miedos puede ayudarte a entenderlos mejor.",
-        "¿Sientes que el miedo limita algunas actividades de tu vida?",
-        "Reconocer el miedo es el primer paso para manejarlo.",
-        "¿Hay alguien en quien confíes para hablar sobre esto?",
-        "Es válido buscar ayuda para enfrentar miedos persistentes.",
-        "¿Qué cosas te hacen sentir seguro o protegido?",
-        "A veces, los pensamientos negativos alimentan el miedo.",
-        "¿Quieres contarme alguna experiencia relacionada con ese miedo?",
-        "La valentía no es ausencia de miedo, sino enfrentarlo.",
-        "Si el miedo interfiere mucho, un especialista puede apoyarte."
+        "El miedo es una emoción natural que nos protege, pero no debe paralizarnos.",
+        "¿Puedes identificar qué te provoca miedo exactamente?",
+        "Hablar de tus miedos puede ayudarte a entenderlos mejor.",
+        "¿Cómo reaccionas cuando el miedo aparece?",
+        "Enfrentar poco a poco esos miedos puede disminuir su poder.",
+        "¿Has probado técnicas de relajación cuando sientes miedo?",
+        "Compartir lo que sientes puede aliviar la carga emocional.",
+        "¿Sientes que el miedo limita tu vida o tus decisiones?",
+        "La valentía no es ausencia de miedo, sino actuar a pesar de él.",
+        "Si el miedo persiste, buscar ayuda profesional es una buena opción."
     ],
     "Culpa": [
-        "Sentir culpa puede ser pesado, es bueno que lo compartas.",
-        "¿Sobre qué situaciones sientes esa culpa?",
-        "Es importante diferenciar entre culpa justa e injusta.",
-        "Hablar sobre la culpa puede ayudarte a aliviarla.",
-        "¿Sientes que la culpa afecta tu autoestima?",
-        "¿Has intentado perdonarte a ti mismo por errores pasados?",
-        "Reconocer la culpa es un paso para superarla.",
-        "¿Qué cambios te gustaría hacer para sentirte mejor?",
-        "La culpa excesiva puede ser dañina para tu bienestar.",
-        "¿Tienes apoyo para hablar de estos sentimientos?",
-        "Es válido buscar ayuda para manejar la culpa persistente.",
-        "¿Cómo te afecta la culpa en tus relaciones personales?",
-        "¿Puedes identificar pensamientos que aumentan la culpa?",
-        "Perdonarte es parte del proceso de sanación.",
-        "Si la culpa te abruma, considera hablar con un profesional."
+        "Sentir culpa puede ser agotador. ¿Qué parte de ti necesita ser perdonada?",
+        "¿Eres igual de duro contigo que lo serías con alguien que amas?",
+        "¿La culpa viene de una expectativa tuya o de los demás?",
+        "Podemos aprender de lo que pasó sin cargarlo como un castigo eterno.",
+        "Todos cometemos errores. La clave está en lo que haces con eso ahora.",
+        "¿Hay algo que puedas hacer para reparar o aliviar esa carga?",
+        "A veces la culpa no es real, sino impuesta. ¿De quién es esa voz interna?",
+        "Eres humano. Equivocarte no te hace menos valioso.",
+        "¿Qué le dirías a un amigo si estuviera en tu lugar?",
+        "Reconocer lo que sientes es el primer paso hacia la liberación emocional."
     ],
     "Inseguridad": [
         "La inseguridad puede afectar muchas áreas de tu vida.",
@@ -144,11 +114,6 @@ respuestas_por_sintoma = {
         "Es normal sentir inseguridad, pero no define quién eres.",
         "¿Tienes alguien de confianza para hablar sobre esto?",
         "Buscar apoyo puede ayudarte a fortalecer tu confianza.",
-        "¿Qué cosas te hacen sentir seguro o valorado?",
-        "Aceptar tus imperfecciones es clave para superar inseguridades.",
-        "¿Quieres contarme alguna experiencia donde te hayas sentido inseguro?",
-        "La confianza se construye paso a paso, sé paciente contigo.",
-        "Si la inseguridad limita tu vida, un profesional puede apoyarte."
     ],
     "Enojo": [
         "El enojo es una emoción válida, es bueno expresarlo.",
@@ -262,12 +227,7 @@ respuestas_por_sintoma = {
         "¿Cómo afectan esos cambios tu vida diaria y relaciones?",
         "Es importante cuidar de tu salud emocional constantemente.",
         "¿Quieres contarme cómo te sientes en los momentos más estables?",
-        "Buscar apoyo puede facilitar manejar los cambios emocionales.",
-        "¿Has probado técnicas para regular tus emociones?",
-        "Dormir y alimentarte bien influye en tu estabilidad emocional.",
-        "¿Hay algo que te ayude a sentirte más equilibrado?",
-        "Es válido buscar ayuda profesional si los cambios son muy intensos.",
-        "Recuerda que mereces sentirte bien y en paz contigo mismo."
+        "Buscar apoyo puede facilitar manejar los cambios emocionales.",       
     ],
     "Apatía": [
         "Sentir apatía puede hacer que todo parezca sin sentido.",
@@ -321,21 +281,16 @@ respuestas_por_sintoma = {
         "Estoy aquí para escucharte y apoyarte en este camino."
     ],
     "Llanto frecuente": [
-        "Llorar puede ser una forma sana de liberar emociones.",
-        "¿Quieres contarme qué te hace llorar con más frecuencia?",
-        "Hablar de lo que sientes puede ayudarte a entender mejor tu llanto.",
-        "¿Sientes alivio después de llorar o te cuesta mucho controlarlo?",
-        "Reconocer tus emociones es un paso para manejar lo que sientes.",
-        "¿Tienes alguien con quien puedas compartir tus sentimientos?",
-        "Es válido llorar y expresar tus emociones sin juzgarte.",
-        "¿Quieres contarme cómo te has sentido en general últimamente?",
-        "Buscar apoyo puede ayudarte a entender por qué lloras tanto.",
-        "¿Has notado si hay algo que desencadene ese llanto?",
-        "Recuerda que mereces cuidado y comprensión en estos momentos.",
-        "¿Has probado técnicas para manejar la emoción que sientes?",
-        "Si el llanto es muy frecuente y afecta tu vida, busca ayuda.",
-        "Estoy aquí para escucharte y acompañarte.",
-        "Expresar tus sentimientos es parte de tu proceso de sanación."
+        "Llorar es una forma natural de liberar emociones contenidas.",
+        "¿Sientes que lloras sin saber exactamente por qué?",
+        "No estás solo/a. Muchas personas pasan por esto más seguido de lo que imaginas.",
+        "¿Qué suele pasar antes de que sientas ganas de llorar?",
+        "Tu llanto también es una voz que pide ser escuchada.",
+        "¿Hay algo que estés conteniendo desde hace tiempo?",
+        "¿Después de llorar sientes alivio o más angustia?",
+        "No te juzgues por expresar tu dolor. Es válido y humano.",
+        "¿Has tenido un espacio seguro donde simplemente puedas llorar y ser escuchado?",
+        "Tus lágrimas tienen un motivo. ¿Te gustaría explorar cuál es?"
     ],
     "Dificultad para concentrarse": [
         "La concentración puede verse afectada por muchos factores.",
@@ -474,33 +429,49 @@ respuestas_por_sintoma = {
         "Si sientes que no puedes manejarlo solo/a, un profesional puede ayudarte."
     ],
     "Problemas de pareja": [
-        "Las relaciones pueden tener altibajos, es válido que busques apoyo.",
-        "¿Te gustaría contarme qué está pasando con tu pareja?",
-        "Expresar tus emociones puede ayudarte a entender mejor la situación.",
-        "¿Sientes que tu relación te está afectando emocionalmente?",
-        "Los conflictos de pareja son comunes, pero mereces sentirte escuchado/a.",
-        "¿Qué te gustaría que mejorara en la relación?",
-        "El respeto mutuo es clave en cualquier relación.",
-        "¿Tienes a alguien con quien hablar cuando las cosas se complican con tu pareja?",
-        "Está bien pedir ayuda si sientes que estás cargando con mucho emocionalmente.",
-        "¿Sientes que la comunicación con tu pareja está funcionando?",
-        "Estás haciendo bien al buscar una forma sana de manejar esto.",
-        "No estás solo/a, muchos pasan por dificultades en sus relaciones.",
-        "Hablar con un profesional puede ser útil para aclarar tus sentimientos.",
-        "¿Quieres compartir cómo empezó esta situación con tu pareja?",
-        "Tú mereces una relación que te aporte tranquilidad y bienestar."
+        "Las relaciones tienen altibajos, es válido buscar apoyo.",
+        "¿Quieres contarme qué pasa con tu pareja?",
+        "Expresar tus emociones puede ayudarte a entender mejor.",
+        "¿Sientes que la relación te afecta emocionalmente?",
+        "Los conflictos son comunes, pero mereces sentirte escuchado.",
+        "¿Qué te gustaría mejorar en la relación?",
+        "El respeto mutuo es clave.",
+        "¿Tienes alguien para hablar cuando se complica la relación?",
+        "Pedir ayuda es sano cuando cargas mucho emocionalmente.",
+        "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-# ===================== SISTEMA CONVERSACIONAL =====================
+# ===================== SISTEMA CONVERSACIONAL MEJORADO =====================
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
+        self.contador_seguir = 0
+        self.ultimas_respuestas = []
     
     def obtener_respuesta(self, sintoma, contexto):
-        respuestas = ["¿Puedes contarme más sobre cómo te sientes?"]  # Respuesta genérica
-        return random.choice(respuestas)
+        # Esta función ahora es más inteligente para evitar bucles
+        if self.contador_seguir >= 2:
+            self.contador_seguir = 0
+            return random.choice([
+                f"Veo que quieres profundizar en {sintoma.lower()}. ¿Hay algo específico que te gustaría discutir?",
+                "¿Te ayudaría si comparto algunas estrategias prácticas para manejar esto?",
+                "Parece que esto es importante para ti. ¿Quieres que exploremos más a fondo?"
+            ])
+        
+        # Respuesta genérica si no hay respuestas específicas para el síntoma
+        return random.choice([
+            "¿Puedes contarme más sobre cómo te sientes?",
+            "¿Cómo te afecta esto en tu día a día?",
+            "¿Qué pensamientos pasan por tu mente cuando esto ocurre?"
+        ])
     
     def agregar_interaccion(self, tipo, mensaje, sintoma=None):
+        if tipo == 'user':
+            if "seguir" in mensaje.lower():
+                self.contador_seguir += 1
+            elif "cambiar" in mensaje.lower():
+                self.contador_seguir = 0
+        
         self.historial.append({
             'tipo': tipo,
             'mensaje': mensaje,
@@ -517,19 +488,14 @@ class SistemaConversacional:
     def __setstate__(self, state):
         self.historial = state['historial']
 
-# ===================== GOOGLE CALENDAR API =====================
+# ===================== FUNCIONES DE CALENDARIO =====================
 def get_calendar_service():
-    # Obtener el contenido JSON desde la variable de entorno
     creds_dict = json.loads(os.environ['GOOGLE_CREDENTIALS'])
-    
-    # Crear credenciales desde ese diccionario
     creds = service_account.Credentials.from_service_account_info(
         creds_dict,
         scopes=['https://www.googleapis.com/auth/calendar']
     )
-    
     return build('calendar', 'v3', credentials=creds)
-
 
 def crear_evento_calendar(fecha, hora, telefono, sintoma):
     try:
@@ -651,12 +617,19 @@ def index():
             if user_input := request.form.get("user_input", "").strip():
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                if any(palabra in user_input.lower() for palabra in ["cita", "agendar", "doctor"]):
+                if any(palabra in user_input.lower() for palabra in ["cambiar", "otro tema"]):
+                    session["estado"] = "inicio"
+                    conversacion.agregar_interaccion('bot', "Claro, hablemos de otro tema. ¿Qué otro síntoma te gustaría discutir?", None)
+                
+                elif any(palabra in user_input.lower() for palabra in ["adiós", "gracias", "hasta luego"]):
+                    session["estado"] = "fin"
+                    conversacion.agregar_interaccion('bot', "Fue un gusto ayudarte. Recuerda que estoy aquí cuando me necesites. 💙", None)
+                
+                elif any(palabra in user_input.lower() for palabra in ["cita", "agendar", "doctor"]) or \
+                     necesita_profesional(session["sintoma_actual"], session["duracion_sintoma"], conversacion.historial):
                     session["estado"] = "derivacion"
-                    conversacion.agregar_interaccion('bot', "Creo que sería bueno que hables con un profesional. ¿Quieres que te ayude a agendar una cita presencial? Un psicólogo se comunicará contigo para confirmar los detalles.", session["sintoma_actual"])
-                elif necesita_profesional(session["sintoma_actual"], session["duracion_sintoma"], conversacion.historial):
-                    session["estado"] = "derivacion"
-                    conversacion.agregar_interaccion('bot', "Creo que sería bueno que hables con un profesional. ¿Quieres que te ayude a agendar una cita presencial? Un psicólogo se comunicará contigo para confirmar los detalles.", session["sintoma_actual"])
+                    conversacion.agregar_interaccion('bot', "Creo que sería bueno que hables con un profesional. ¿Quieres que te ayude a agendar una cita presencial?", session["sintoma_actual"])
+                
                 else:
                     respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], {})
                     conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
@@ -667,9 +640,9 @@ def index():
                 if any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita"]):
                     session["estado"] = "agendar_cita"
                     mensaje = (
-                        "Gracias por confiar en nosotros. Tu cita será de manera presencial. "
-                        "Un psicólogo se comunicará contigo para confirmar los detalles y la ubicación exacta. "
-                        "Por favor completa los datos:"
+                        "Gracias por confiar en nosotros. Por favor completa los datos para tu cita presencial:\n\n"
+                        "📅 Fecha disponible: " + session["fechas_validas"]['hoy'] + "\n"
+                        "⏰ Horario de atención: 9:00 AM a 6:00 PM"
                     )
                     conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
                 else:
@@ -679,7 +652,6 @@ def index():
             if fecha := request.form.get("fecha_cita"):
                 telefono = request.form.get("telefono", "").strip()
 
-                # Validación del teléfono
                 if len(telefono) != 10 or not telefono.isdigit():
                     conversacion.agregar_interaccion('bot', "⚠️ El teléfono debe tener 10 dígitos numéricos. Por favor, ingrésalo de nuevo.", None)
                     session["conversacion_historial"] = conversacion.historial
@@ -711,11 +683,11 @@ def index():
                         ):
                             mensaje = (
                                 f"✅ Cita presencial confirmada para {cita['fecha']} a las {cita['hora']}. "
-                                "Recibirás una llamada para cordinar su consulta . "
+                                "Recibirás una llamada para coordinar tu consulta. "
                                 "¡Gracias por confiar en nosotros!"
                             )
                         else:
-                            mensaje = f"✅ Cita registrada (pero error al notificar al profesional)"
+                            mensaje = "✅ Cita registrada (pero error al notificar al profesional)"
 
                         conversacion.agregar_interaccion('bot', mensaje, None)
                         session["estado"] = "fin"
