@@ -445,7 +445,7 @@ respuestas_por_sintoma = {
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
-        self.respuestas_usadas = []  # Registro de respuestas ya utilizadas
+        self.respuestas_usadas = []  
         self.contexto_actual = None
 
     def obtener_respuesta_unica(self, sintoma):
