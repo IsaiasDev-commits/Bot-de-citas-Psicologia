@@ -1,5 +1,5 @@
-Equilibra - Tu espacio emocional seguro 💙
-📖 Descripción
+Equilibra - Tu espacio emocional seguro 
+ Descripción
 
 Equilibra es una aplicación web desarrollada en Flask (Python) que actúa como un espacio seguro para explorar emociones y, si es necesario, agendar citas con un profesional.
 
@@ -15,7 +15,7 @@ Notificaciones por correo al profesional asignado.
 
 Una interfaz amigable y con soporte de modo oscuro.
 
-📂 Estructura del proyecto
+ Estructura del proyecto
 .
 ├── app.py              # Backend en Flask
 ├── templates/
@@ -26,7 +26,7 @@ Una interfaz amigable y con soporte de modo oscuro.
 ├── .env                # Variables de entorno (Google API, credenciales)
 └── README.md           # Documentación
 
-⚙️ Instalación y ejecución
+Instalación y ejecución
 
 Clonar el repositorio
 
