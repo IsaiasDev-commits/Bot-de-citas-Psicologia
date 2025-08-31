@@ -58,28 +58,3 @@ python app.py
 
 
 Accede en el navegador a: http://localhost:5000
-
-
-Modelo Entidad-Relación (ERD)
-erDiagram
-    USUARIO {
-        string session_id
-        string sintoma_actual
-        int duracion_sintoma
-    }
-    CONVERSACION {
-        int id
-        string tipo
-        string mensaje
-        datetime timestamp
-    }
-    CITA {
-        int id
-        date fecha
-        time hora
-        string telefono
-        string sintoma
-    }
-
-    USUARIO ||--o{ CONVERSACION : mantiene
-    USUARIO ||--o{ CITA : agenda
