@@ -5,6 +5,7 @@ import smtplib
 import json 
 import re
 import logging
+import sys
 from logging.handlers import RotatingFileHandler
 from functools import lru_cache
 from email.mime.multipart import MIMEMultipart
@@ -24,6 +25,11 @@ load_dotenv()
 env = Env()
 env.read_env()
 
+# Log inicial para debug
+print("Python version:", sys.version)
+print("Current directory:", os.getcwd())
+print("Files in directory:", os.listdir('.'))
+
 app = Flask(__name__)
 app.secret_key = env.str("FLASK_SECRET_KEY")
 
@@ -32,9 +38,10 @@ csrf = CSRFProtect(app)
 
 # Configuración de rate limiting
 limiter = Limiter(
-    app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
 )
 
 # Configuración de logging
@@ -101,8 +108,9 @@ sintomas_disponibles = [
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
 
+# Respuestas por síntoma (versión resumida)
 respuestas_por_sintoma = {
-     "Ansiedad": [
+    "Ansiedad": [
          "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
         "Cuando sientes ansiedad, ¿qué técnicas has probado para calmarte?",
         "¿Notas que la ansiedad afecta tu cuerpo (ej. taquicardia, sudoración)?",
@@ -543,7 +551,7 @@ class SistemaConversacional:
     def analizar_contexto(self, user_input):
         """Detecta palabras clave para enriquecer el diálogo"""
         if not isinstance(user_input, str):
-            return None  # Prevenir error si user_input no es string
+            return None
 
         user_input = user_input.lower()
         if any(palabra in user_input for palabra in ["tranquilo", "tranquilidad"]):
@@ -620,9 +628,7 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
 def programar_recordatorio(fecha, hora, telefono):
     """Programa un recordatorio para la cita (implementación básica)"""
     try:
-        # Aquí podrías integrar con un servicio de SMS/email para recordatorios
         app.logger.info(f"Recordatorio programado para {fecha} {hora}, tel: {telefono}")
-        # En una implementación real, aquí se conectaría a Twilio, SendGrid, etc.
     except Exception as e:
         app.logger.error(f"Error al programar recordatorio: {e}")
 
@@ -690,7 +696,7 @@ def index():
 
         if estado_actual == "inicio":
             if sintomas := request.form.getlist("sintomas"):
-                if not sintomas:  # Validación adicional
+                if not sintomas:
                     return render_template("index.html", error="Por favor selecciona un síntoma")
                 
                 session["sintoma_actual"] = sintomas[0]
@@ -860,13 +866,25 @@ def internal_error(error):
 def not_found(error):
     return jsonify({"error": "Endpoint no encontrado"}), 404
 
+# ===================== CONFIGURACIÓN PARA RENDER =====================
 if __name__ == "__main__":
-    # Inicializar base de datos para logs y conversaciones
-    if not os.path.exists("logs"):
-        os.makedirs("logs")
+    # Verificar variables de entorno críticas en producción
+    if os.environ.get('FLASK_ENV') == 'production':
+        required_env_vars = ["FLASK_SECRET_KEY", "EMAIL_USER", "EMAIL_PASSWORD", "PSICOLOGO_EMAIL", "GOOGLE_CREDENTIALS"]
+        missing_vars = [var for var in required_env_vars if not os.getenv(var)]
         
-    if not os.path.exists("conversaciones"):
-        os.makedirs("conversaciones")
+        if missing_vars:
+            print(f"ERROR: Variables de entorno faltantes en producción: {missing_vars}")
+            exit(1)
     
-    app.logger.info("Iniciando aplicación Equilibra")
-    app.run(host='0.0.0.0', port=5000, debug=os.environ.get('FLASK_ENV') != 'production')
+    # Inicializar directorios necesarios
+    for directory in ["logs", "conversaciones"]:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    
+    # Usar el puerto que Render proporciona
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    
+    app.logger.info(f"Iniciando aplicación Equilibra en puerto {port}")
+    app.run(host='0.0.0.0', port=port, debug=debug)
