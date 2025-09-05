@@ -816,7 +816,7 @@ def index():
         fechas_validas=session["fechas_validas"]
     )
 
-# ===================== RUTAS ADICIONALES =====================
+# ===================== RUTA RESET =====================
 @app.route("/reset", methods=["POST"])
 def reset():
     try:
@@ -827,6 +827,7 @@ def reset():
         app.logger.error(f"Error al reiniciar sesión: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ===================== RUTAS ADICIONALES =====================
 @app.route("/verificar-horario", methods=["POST"])
 def verificar_horario():
     try:

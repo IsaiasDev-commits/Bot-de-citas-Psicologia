@@ -566,6 +566,7 @@
 
     {% if estado == "inicio" %}
       <form method="POST" class="card" id="sintomasForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="radio-list">
           <p class="section-title">¿Cómo te sientes hoy? (Selecciona un síntoma)</p>
           {% for sintoma in sintomas %}
@@ -595,6 +596,7 @@
         {% endfor %}
       </div>
       <form method="POST" class="card">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if sintoma_actual %}
           <p class="section-title">¿Desde cuándo experimentas {{ sintoma_actual.lower() }}?</p>
         {% else %}
@@ -630,6 +632,7 @@
         </div>
       </div>
       <form method="POST" class="card">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <textarea name="user_input" placeholder="Escribe tu respuesta aquí..." rows="3" required></textarea>
         <div class="form-row">
           <input type="submit" value="Enviar" />
@@ -654,6 +657,7 @@
         {% endfor %}
       </div>
       <form method="POST" id="citaForm" class="card">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <p class="section-title">Selecciona una fecha para tu cita:</p>
         <input type="date" name="fecha_cita" min="{{ fechas_validas.min_cita }}" max="{{ fechas_validas.max_cita }}" required />
 
@@ -754,7 +758,7 @@
       mostrarEscribiendo();
       const form = document.createElement('form');
       form.method = 'POST';
-      form.innerHTML = '<input type="hidden" name="user_input" value="Quiero agendar una cita">';
+      form.innerHTML = '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="user_input" value="Quiero agendar una cita">';
       document.body.appendChild(form);
       form.submit();
     }
@@ -762,7 +766,7 @@
     // ===================== REINICIAR CHAT =====================
     async function reiniciarChat() {
       mostrarEscribiendo();
-      const btn = event.target;
+      const btn = event.target.closest('button') || event.target;
       const originalText = btn.innerHTML;
       btn.innerHTML = 'Reiniciando... <span class="loading"></span>';
       btn.disabled = true;
@@ -770,24 +774,30 @@
       try {
         const response = await fetch('/reset', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+          },
           credentials: 'same-origin'
         });
         
-        if (!response.ok) throw new Error('Error en la respuesta');
-        window.location.href = '/';
+        if (response.ok) {
+          window.location.href = '/';
+        } else {
+          throw new Error('Error en la respuesta del servidor');
+        }
       } catch (error) {
         console.error('Error:', error);
-        alert('Error al reiniciar. Intenta nuevamente.');
+        alert('Error al reiniciar. Intenta recargar la página.');
       } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
+        ocultarEscribiendo();
       }
     }
 
     // ===================== CANCELAR CITA =====================
     function cancelarCita() {
-      // Simplemente redirigir a la página principal en lugar de llamar a una ruta inexistente
       window.location.href = '/';
     }
 
@@ -812,7 +822,10 @@
       try {
         const response = await fetch('/verificar-horario', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+          },
           body: JSON.stringify({ fecha, hora })
         });
         return await response.json();
