@@ -3,6 +3,10 @@ from datetime import datetime, timedelta
 import os
 import smtplib
 import json 
+import re
+import logging
+from logging.handlers import RotatingFileHandler
+from functools import lru_cache
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from dotenv import load_dotenv
@@ -10,14 +14,81 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import random
+from environs import Env
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
 
 # ===================== CONFIGURACIÓN INICIAL =====================
 load_dotenv()
+env = Env()
+env.read_env()
+
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY")
+app.secret_key = env.str("FLASK_SECRET_KEY")
+
+# Configuración de CSRF protection
+csrf = CSRFProtect(app)
+
+# Configuración de rate limiting
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+
+# Configuración de logging
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
+handler = RotatingFileHandler('logs/app.log', maxBytes=10000, backupCount=3)
+handler.setLevel(logging.INFO)
+app.logger.addHandler(handler)
+
+# Configuración basada en entorno
+if os.environ.get('FLASK_ENV') == 'production':
+    app.config['DEBUG'] = False
+    app.config['TESTING'] = False
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+else:
+    app.config['DEBUG'] = True
 
 if not os.path.exists("conversaciones"):
     os.makedirs("conversaciones")
+
+# ===================== FUNCIONES DE UTILIDAD =====================
+def sanitizar_input(texto):
+    """Elimina caracteres potencialmente peligrosos y limita la longitud"""
+    if not texto:
+        return ""
+    
+    # Eliminar caracteres potencialmente peligrosos
+    texto = re.sub(r'[<>{}[\]();]', '', texto)
+    # Limitar longitud
+    return texto[:500] if len(texto) > 500 else texto
+
+def validar_telefono(telefono):
+    """Valida que el teléfono tenga el formato correcto (09xxxxxxxx)"""
+    if not telefono:
+        return False
+    return re.match(r'^09\d{8}$', telefono) is not None
+
+def calcular_duracion_dias(fecha_str):
+    if not fecha_str:
+        return 0
+    try:
+        fecha_inicio = datetime.strptime(fecha_str, "%Y-%m-%d")
+        return (datetime.now() - fecha_inicio).days
+    except ValueError:
+        return 0
+
+def necesita_profesional(sintoma, duracion_dias, historial):
+    if duracion_dias > 30:
+        return True
+    if historial and any(palabra in historial[-1]['mensaje'].lower() for palabra in ["suicidio", "autoflagelo", "no puedo más"]):
+        return True
+    return False
 
 # ===================== DATOS DE SÍNTOMAS =====================
 sintomas_disponibles = [
@@ -441,6 +512,7 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
+
 # ===================== SISTEMA CONVERSACIONAL MEJORADO =====================
 class SistemaConversacional:
     def __init__(self):
@@ -498,17 +570,25 @@ class SistemaConversacional:
         })
 
 # ===================== FUNCIONES DE CALENDARIO =====================
+@lru_cache(maxsize=128)
 def get_calendar_service():
-    creds_dict = json.loads(os.environ['GOOGLE_CREDENTIALS'])
-    creds = service_account.Credentials.from_service_account_info(
-        creds_dict,
-        scopes=['https://www.googleapis.com/auth/calendar']
-    )
-    return build('calendar', 'v3', credentials=creds)
+    try:
+        creds_dict = json.loads(os.environ['GOOGLE_CREDENTIALS'])
+        creds = service_account.Credentials.from_service_account_info(
+            creds_dict,
+            scopes=['https://www.googleapis.com/auth/calendar']
+        )
+        return build('calendar', 'v3', credentials=creds)
+    except Exception as e:
+        app.logger.error(f"Error al obtener servicio de calendario: {e}")
+        return None
 
 def crear_evento_calendar(fecha, hora, telefono, sintoma):
     try:
         service = get_calendar_service()
+        if not service:
+            return None
+            
         event = {
             'summary': f'Cita psicológica - {sintoma}',
             'description': f'Teléfono: {telefono}\nSíntoma: {sintoma}',
@@ -525,15 +605,35 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
             calendarId='primary',
             body=event
         ).execute()
+        
+        # Programar recordatorio
+        programar_recordatorio(fecha, hora, telefono)
+        
         return event.get('htmlLink')
     except HttpError as error:
-        print(f"Error al crear evento: {error}")
+        app.logger.error(f"Error al crear evento: {error}")
         return None
+    except Exception as e:
+        app.logger.error(f"Error inesperado al crear evento: {e}")
+        return None
+
+def programar_recordatorio(fecha, hora, telefono):
+    """Programa un recordatorio para la cita (implementación básica)"""
+    try:
+        # Aquí podrías integrar con un servicio de SMS/email para recordatorios
+        app.logger.info(f"Recordatorio programado para {fecha} {hora}, tel: {telefono}")
+        # En una implementación real, aquí se conectaría a Twilio, SendGrid, etc.
+    except Exception as e:
+        app.logger.error(f"Error al programar recordatorio: {e}")
 
 # ===================== FUNCIÓN DE CORREO =====================
 def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
     remitente = os.getenv("EMAIL_USER")
     password = os.getenv("EMAIL_PASSWORD")
+    
+    if not remitente or not password:
+        app.logger.error("Credenciales de email no configuradas")
+        return False
     
     mensaje = MIMEMultipart()
     mensaje['From'] = remitente
@@ -555,27 +655,15 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(remitente, password)
             server.send_message(mensaje)
+        app.logger.info(f"Correo de confirmación enviado a {destinatario}")
         return True
     except Exception as e:
-        print(f"Error enviando correo: {e}")
+        app.logger.error(f"Error enviando correo: {e}")
         return False
-
-# ===================== FUNCIONES DE UTILIDAD =====================
-def calcular_duracion_dias(fecha_str):
-    if not fecha_str:
-        return 0
-    fecha_inicio = datetime.strptime(fecha_str, "%Y-%m-%d")
-    return (datetime.now() - fecha_inicio).days
-
-def necesita_profesional(sintoma, duracion_dias, historial):
-    if duracion_dias > 30:
-        return True
-    if any(palabra in historial[-1]['mensaje'].lower() for palabra in ["suicidio", "autoflagelo", "no puedo más"]):
-        return True
-    return False
 
 # ===================== RUTAS PRINCIPALES =====================
 @app.route("/", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
 def index():
     conversacion = SistemaConversacional()
     
@@ -602,16 +690,20 @@ def index():
 
         if estado_actual == "inicio":
             if sintomas := request.form.getlist("sintomas"):
+                if not sintomas:  # Validación adicional
+                    return render_template("index.html", error="Por favor selecciona un síntoma")
+                
                 session["sintoma_actual"] = sintomas[0]
                 session["estado"] = "evaluacion"
                 conversacion.agregar_interaccion('bot', f"Entiendo que estás experimentando {sintomas[0].lower()}. ¿Desde cuándo lo notas?", sintomas[0])
+                app.logger.info(f"Usuario seleccionó síntoma: {sintomas[0]}")
 
         elif estado_actual == "evaluacion":
             if fecha := request.form.get("fecha_inicio_sintoma"):
                 session["duracion_sintoma"] = calcular_duracion_dias(fecha)
                 session["estado"] = "profundizacion"
                 
-                diferencia = (datetime.now() - datetime.strptime(fecha, "%Y-%m-%d")).days
+                diferencia = session["duracion_sintoma"]
                 if diferencia < 30:
                     comentario = "Es bueno que lo identifiques temprano."
                 elif diferencia < 365:
@@ -623,7 +715,7 @@ def index():
                 conversacion.agregar_interaccion('bot', f"{comentario} {respuesta}", session["sintoma_actual"])
 
         elif estado_actual == "profundizacion":
-            if user_input := request.form.get("user_input", "").strip():
+            if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
                 if any(palabra in user_input.lower() for palabra in ["cambiar", "otro tema"]):
@@ -640,11 +732,11 @@ def index():
                     conversacion.agregar_interaccion('bot', "Creo que sería bueno que hables con un profesional. ¿Quieres que te ayude a agendar una cita presencial?", session["sintoma_actual"])
                 
                 else:
-                    respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], {})
+                    respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
                     conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
 
         elif estado_actual == "derivacion":
-            if user_input := request.form.get("user_input", "").strip():
+            if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 if any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita"]):
                     session["estado"] = "agendar_cita"
@@ -661,8 +753,8 @@ def index():
             if fecha := request.form.get("fecha_cita"):
                 telefono = request.form.get("telefono", "").strip()
 
-                if len(telefono) != 10 or not telefono.isdigit():
-                    conversacion.agregar_interaccion('bot', "⚠️ El teléfono debe tener 10 dígitos numéricos. Por favor, ingrésalo de nuevo.", None)
+                if not validar_telefono(telefono):
+                    conversacion.agregar_interaccion('bot', "⚠️ El teléfono debe comenzar con 09 y tener 10 dígitos numéricos. Por favor, ingrésalo de nuevo.", None)
                     session["conversacion_historial"] = conversacion.historial
                     return redirect(url_for("index"))
 
@@ -700,8 +792,10 @@ def index():
 
                         conversacion.agregar_interaccion('bot', mensaje, None)
                         session["estado"] = "fin"
+                        app.logger.info(f"Cita agendada exitosamente: {cita}")
                     else:
                         conversacion.agregar_interaccion('bot', "❌ Error al agendar. Intenta nuevamente", None)
+                        app.logger.error(f"Error al agendar cita: {cita}")
 
         session["conversacion_historial"] = conversacion.historial
         return redirect(url_for("index"))
@@ -719,14 +813,25 @@ def index():
 # ===================== RUTAS ADICIONALES =====================
 @app.route("/reset", methods=["POST"])
 def reset():
-    session.clear()
-    return jsonify({"status": "success"})
+    try:
+        session.clear()
+        app.logger.info("Sesión reiniciada por el usuario")
+        return jsonify({"status": "success"})
+    except Exception as e:
+        app.logger.error(f"Error al reiniciar sesión: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/verificar-horario", methods=["POST"])
 def verificar_horario():
-    data = request.get_json()
     try:
+        data = request.get_json()
+        if not data or 'fecha' not in data or 'hora' not in data:
+            return jsonify({"error": "Datos incompletos"}), 400
+            
         service = get_calendar_service()
+        if not service:
+            return jsonify({"error": "Servicio de calendario no disponible"}), 500
+            
         eventos = service.events().list(
             calendarId='primary',
             timeMin=f"{data['fecha']}T{data['hora']}:00-05:00",
@@ -735,7 +840,33 @@ def verificar_horario():
         ).execute()
         return jsonify({"disponible": len(eventos.get('items', [])) == 0})
     except HttpError as error:
+        app.logger.error(f"Error de Google API: {error}")
         return jsonify({"error": str(error)}), 500
+    except Exception as e:
+        app.logger.error(f"Error inesperado al verificar horario: {e}")
+        return jsonify({"error": "Error interno del servidor"}), 500
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    app.logger.warning(f"Límite de tasa excedido: {e}")
+    return jsonify({"error": "Demasiadas solicitudes. Por favor, intenta más tarde."}), 429
+
+@app.errorhandler(500)
+def internal_error(error):
+    app.logger.error(f"Error interno del servidor: {error}")
+    return jsonify({"error": "Error interno del servidor"}), 500
+
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Endpoint no encontrado"}), 404
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    # Inicializar base de datos para logs y conversaciones
+    if not os.path.exists("logs"):
+        os.makedirs("logs")
+        
+    if not os.path.exists("conversaciones"):
+        os.makedirs("conversaciones")
+    
+    app.logger.info("Iniciando aplicación Equilibra")
+    app.run(host='0.0.0.0', port=5000, debug=os.environ.get('FLASK_ENV') != 'production')

@@ -391,6 +391,42 @@
       animation: shake 0.5s;
     }
 
+    /* Progress indicator */
+    .progress-indicator {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: var(--space-lg);
+      position: relative;
+    }
+
+    .progress-indicator::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background-color: var(--divider);
+      transform: translateY(-50%);
+      z-index: 1;
+    }
+
+    .step {
+      position: relative;
+      z-index: 2;
+      background-color: var(--surface);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      border: 1px solid var(--divider);
+    }
+
+    .step.active {
+      background-color: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
     /* Responsive */
     @media (max-width: 600px), (max-height: 700px) {
       body {
@@ -431,6 +467,21 @@
       .top-controls {
         gap: var(--space-sm);
       }
+
+      .progress-indicator {
+        flex-wrap: wrap;
+        gap: var(--space-sm);
+      }
+      
+      .progress-indicator::before {
+        display: none;
+      }
+      
+      .step {
+        flex: 1;
+        text-align: center;
+        min-width: 60px;
+      }
     }
 
     @media screen and (min-width: 600px) and (orientation: landscape) {
@@ -452,6 +503,34 @@
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-5px); }
     }
+
+    /* Mejoras de accesibilidad */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Mejor contraste para modo oscuro */
+    [data-theme="dark"] .message.user {
+      background-color: #1e3a2b;
+      color: #e0e0e0;
+    }
+
+    /* Soporte para lectores de pantalla */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
   </style>
 </head>
 <body>
@@ -461,6 +540,15 @@
       <div class="logo-container">
         <img src="{{ url_for('static', filename='logo.png') }}" alt="Equilibra - Espacio seguro">
       </div>
+    </div>
+
+    <!-- Indicador de progreso -->
+    <div class="progress-indicator">
+      <div class="step {% if estado == 'inicio' %}active{% endif %}">Inicio</div>
+      <div class="step {% if estado == 'evaluacion' %}active{% endif %}">Evaluación</div>
+      <div class="step {% if estado in ['profundizacion', 'derivacion'] %}active{% endif %}">Diálogo</div>
+      <div class="step {% if estado == 'agendar_cita' %}active{% endif %}">Cita</div>
+      <div class="step {% if estado == 'fin' %}active{% endif %}">Final</div>
     </div>
 
     {% if estado == "inicio" %}
@@ -579,15 +667,15 @@
         <p class="section-title">Teléfono de contacto (requerido):</p>
         <input type="tel" name="telefono" id="telefonoInput" 
                placeholder="Ej: 0991234567" 
-               pattern="[0-9]{10}" 
-               title="Debe tener 10 dígitos" 
+               pattern="09[0-9]{8}" 
+               title="Debe comenzar con 09 y tener 10 dígitos" 
                inputmode="numeric" 
                maxlength="10"
                minlength="10"
                oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                required />
         <div id="telefonoError" class="error-message">
-          El teléfono debe tener 10 dígitos exactos
+          El teléfono debe comenzar con 09 y tener 10 dígitos exactos
         </div>
         
         <div class="form-row">
@@ -697,30 +785,10 @@
       }
     }
 
-    // ===================== AGENDAR CITA =====================
-    async function cancelarCita() {
-      const btn = event.target;
-      const originalText = btn.innerHTML;
-      btn.innerHTML = 'Cancelando... <span class="loading"></span>';
-      btn.disabled = true;
-      
-      try {
-        const response = await fetch('/cancelar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin'
-        });
-        
-        if (!response.ok) throw new Error('Error en la respuesta');
-        const data = await response.json();
-        window.location.href = data.redirect;
-      } catch (error) {
-        console.error('Error:', error);
-        alert('Error al cancelar. Intenta nuevamente.');
-      } finally {
-        btn.innerHTML = originalText;
-        btn.disabled = false;
-      }
+    // ===================== CANCELAR CITA =====================
+    function cancelarCita() {
+      // Simplemente redirigir a la página principal en lugar de llamar a una ruta inexistente
+      window.location.href = '/';
     }
 
     // ===================== HORARIOS =====================
@@ -828,12 +896,17 @@
     const telefonoInput = document.getElementById('telefonoInput');
     const telefonoError = document.getElementById('telefonoError');
 
+    function validarTelefono(telefono) {
+      const regex = /^09\d{8}$/;
+      return regex.test(telefono);
+    }
+
     if (telefonoInput) {
       telefonoInput.addEventListener('input', function() {
         const valor = this.value.replace(/\D/g, '');
         this.value = valor;
         
-        if (valor.length !== 10) {
+        if (!validarTelefono(valor)) {
           this.classList.add('error');
           telefonoError.style.display = 'block';
         } else {
@@ -844,7 +917,7 @@
 
       // Validación al enviar el formulario
       citaForm?.addEventListener('submit', function(e) {
-        if (telefonoInput.value.length !== 10) {
+        if (!validarTelefono(telefonoInput.value)) {
           e.preventDefault();
           telefonoInput.classList.add('error');
           telefonoError.style.display = 'block';
@@ -853,14 +926,14 @@
       });
 
       telefonoInput.addEventListener('focus', function() {
-        if (this.value.length < 10) {
+        if (!validarTelefono(this.value)) {
           this.classList.add('error');
           telefonoError.style.display = 'block';
         }
       });
 
       telefonoInput.addEventListener('blur', function() {
-        if (this.value.length === 10) {
+        if (validarTelefono(this.value)) {
           this.classList.remove('error');
           telefonoError.style.display = 'none';
         }
@@ -898,11 +971,19 @@
     }
 
     // Validación de selección única en síntomas
-    document.getElementById('sintomasForm')?. addEventListener('submit', function(e) {
+    document.getElementById('sintomasForm')?.addEventListener('submit', function(e) {
       const seleccionado = document.querySelector('input[name="sintomas"]:checked');
       if (!seleccionado) {
         e.preventDefault();
-        alert ('Por favor selecciona un síntoma para continuar');
+        alert('Por favor selecciona un síntoma para continuar');
+      }
+    });
+
+    // Navegación con teclado mejorada
+    document.addEventListener('keydown', function(e) {
+      // Atajos de teclado
+      if (e.key === 'Escape') {
+        reiniciarChat();
       }
     });
  </script>
