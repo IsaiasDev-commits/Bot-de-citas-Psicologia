@@ -36,11 +36,11 @@ app.secret_key = env.str("FLASK_SECRET_KEY")
 # Configuración de CSRF protection
 csrf = CSRFProtect(app)
 
-# Configuración de rate limiting
+# Configuración de rate limiting - LÍMITES AJUSTADOS
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=["1000 per day", "200 per hour"],  # Límites más generosos
     storage_uri="memory://"
 )
 
@@ -669,7 +669,7 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
 
 # ===================== RUTAS PRINCIPALES =====================
 @app.route("/", methods=["GET", "POST"])
-@limiter.limit("10 per minute")
+@limiter.limit("30 per minute")  # AUMENTADO A 30 solicitudes por minuto
 def index():
     conversacion = SistemaConversacional()
     
