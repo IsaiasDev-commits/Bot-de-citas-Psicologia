@@ -22,7 +22,7 @@ from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 from markupsafe import escape
 
-# CONFIGURACIÓN INICIAL 
+# ===================== CONFIGURACIÓN INICIAL =====================
 load_dotenv()
 env = Env()
 env.read_env()
@@ -72,7 +72,7 @@ app.logger.addHandler(handler)
 if not os.path.exists("conversaciones"):
     os.makedirs("conversaciones")
 
-# FUNCIÓN PARA OLLAMA 
+# ===================== FUNCIÓN PARA OLLAMA =====================
 def generar_respuesta_llm(prompt, modelo="mistral"):
     """
     Envía un prompt al modelo de Ollama y devuelve la respuesta generada.
@@ -95,13 +95,13 @@ def generar_respuesta_llm(prompt, modelo="mistral"):
         app.logger.error(f"Error al generar respuesta con Ollama: {e}")
         return None
 
-# FUNCIONES DE UTILIDAD 
+# ===================== FUNCIONES DE UTILIDAD =====================
 def sanitizar_input(texto):
     """Elimina caracteres peligrosos, escapa HTML y limita la longitud"""
     if not texto:
         return ""
-    texto = escape(texto)  
-    texto = re.sub(r'[<>{}[\]();]', '', texto)  
+    texto = escape(texto)
+    texto = re.sub(r'[<>{}[\]();]', '', texto)
     return texto[:500] if len(texto) > 500 else texto
 
 def validar_telefono(telefono):
@@ -138,7 +138,7 @@ sintomas_disponibles = [
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
 
-# Respuestas por síntoma (versión abreviada)
+# Respuestas por síntoma 
 respuestas_por_sintoma = {
     "Ansiedad": [
          "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
@@ -550,32 +550,35 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-# SISTEMA CONVERSACIONAL 
+
+# ===================== SISTEMA CONVERSACIONAL MEJORADO =====================
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
         self.respuestas_usadas = []  
         self.contexto_actual = None
 
+    def to_dict(self):
+        """Convierte el objeto a un diccionario para serialización"""
+        return {
+            'historial': self.historial,
+            'respuestas_usadas': self.respuestas_usadas,
+            'contexto_actual': self.contexto_actual
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        """Recrea el objeto desde un diccionario"""
+        instance = cls()
+        instance.historial = data.get('historial', [])
+        instance.respuestas_usadas = data.get('respuestas_usadas', [])
+        instance.contexto_actual = data.get('contexto_actual', None)
+        return instance
+
     def obtener_respuesta_unica(self, sintoma):
         """Obtiene una respuesta no utilizada para el síntoma (fallback)"""
-        respuestas_disponibles = [
-            r for r in respuestas_por_sintoma.get(sintoma, []) 
-            if r not in self.respuestas_usadas
-        ]
-        
-        # Si ya usamos todas, reiniciamos el registro
-        if not respuestas_disponibles:
-            self.respuestas_usadas = []
-            respuestas_disponibles = respuestas_por_sintoma.get(sintoma, [])
-        
-        # Seleccionar una respuesta al azar
-        if respuestas_disponibles:
-            respuesta = random.choice(respuestas_disponibles)
-            self.respuestas_usadas.append(respuesta)
-            return respuesta
-        else:
-            return "¿Puedes contarme más sobre cómo te sientes?"
+        # Aquí irían tus respuestas por síntoma - las agregarás después
+        return "¿Puedes contarme más sobre cómo te sientes?"
 
     def analizar_contexto(self, user_input):
         """Detecta palabras clave para enriquecer el diálogo"""
@@ -596,19 +599,18 @@ class SistemaConversacional:
         return None
 
     def obtener_respuesta(self, sintoma, user_input):
-        """Genera una respuesta contextual y empática"""
-        # Detección de crisis
+        # 1. Filtro de seguridad (suicidio, autolesión, etc.)
         palabras_crisis = ["suicidio", "autolesión", "autoflagelo", "matarme", "no quiero vivir", 
                           "acabar con todo", "no vale la pena", "sin esperanza"]
         if any(palabra in user_input.lower() for palabra in palabras_crisis):
             return "⚠️ Este tema es muy importante. Por favor, comunícate de inmediato con tu psicólogo o llama al número de emergencias 911."
 
-        # Respuesta contextual
+        # 2. Primero intentar análisis contextual
         respuesta_contextual = self.analizar_contexto(user_input)
         if respuesta_contextual:
             return respuesta_contextual
-
-        # Intenta usar Ollama si está disponible
+        
+        # 3. Intentar con Ollama (IA)
         try:
             prompt = f"""
             Eres un asistente empático que ayuda a las personas a reflexionar sobre sus emociones.
@@ -617,16 +619,17 @@ class SistemaConversacional:
             Responde de manera comprensiva, breve y empática, sin reemplazar al psicólogo.
             """
             respuesta_ia = generar_respuesta_llm(prompt, modelo="mistral")
+            
+            # Verificar que la respuesta de IA sea válida
             if respuesta_ia and len(respuesta_ia) > 10 and "Error" not in respuesta_ia:
                 return respuesta_ia
         except Exception as e:
             app.logger.error(f"Error al obtener respuesta de Ollama: {e}")
-
-        # Fallback a respuestas predefinidas
+        
+        # 4. Fallback a respuestas predefinidas
         return self.obtener_respuesta_unica(sintoma)
 
     def agregar_interaccion(self, tipo, mensaje, sintoma=None):
-        """Registra interacciones sin datos sensibles"""
         self.historial.append({
             'tipo': tipo,
             'mensaje': mensaje,
@@ -634,319 +637,322 @@ class SistemaConversacional:
             'timestamp': datetime.now().strftime("%H:%M:%S")
         })
 
-# GOOGLE CALENDAR 
-def obtener_servicio_calendar():
-    """Obtiene el servicio de Google Calendar"""
+# ===================== FUNCIONES DE CALENDARIO =====================
+@lru_cache(maxsize=128)
+def get_calendar_service():
     try:
-        credentials = service_account.Credentials.from_service_account_file(
-            'credentials.json',
+        creds_dict = json.loads(os.environ['GOOGLE_CREDENTIALS'])
+        creds = service_account.Credentials.from_service_account_info(
+            creds_dict,
             scopes=['https://www.googleapis.com/auth/calendar']
         )
-        return build('calendar', 'v3', credentials=credentials)
+        return build('calendar', 'v3', credentials=creds)
     except Exception as e:
-        app.logger.error(f"Error obteniendo servicio de Calendar: {e}")
+        app.logger.error(f"Error al obtener servicio de calendario: {e}")
         return None
 
-def crear_evento_calendar(nombre, email, telefono, fecha, hora, motivo):
-    """Crea un evento en Google Calendar"""
+def crear_evento_calendar(fecha, hora, telefono, sintoma):
     try:
-        service = obtener_servicio_calendar()
+        service = get_calendar_service()
         if not service:
-            return False
-
-        start_datetime = datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
-        end_datetime = start_datetime + timedelta(hours=1)
-        
-        timezone = 'America/Montevideo'
-        
+            return None
+            
         event = {
-            'summary': f'Consulta Psicológica - {nombre}',
-            'description': f'Paciente: {nombre}\nEmail: {email}\nTeléfono: {telefono}\nMotivo: {motivo}',
+            'summary': f'Cita psicológica - {sintoma}',
+            'description': f'Teléfono: {telefono}\nSíntoma: {sintoma}',
             'start': {
-                'dateTime': start_datetime.isoformat(),
-                'timeZone': timezone,
+                'dateTime': f"{fecha}T{hora}:00-05:00",
+                'timeZone': 'America/Guayaquil',
             },
             'end': {
-                'dateTime': end_datetime.isoformat(),
-                'timeZone': timezone,
-            },
-            'attendees': [
-                {'email': email},
-                {'email': 'psicologo@ejemplo.com'}  
-            ],
-            'reminders': {
-                'useDefault': False,
-                'overrides': [
-                    {'method': 'email', 'minutes': 24 * 60},
-                    {'method': 'popup', 'minutes': 30},
-                ],
+                'dateTime': f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00",
+                'timeZone': 'America/Guayaquil',
             },
         }
+        event = service.events().insert(
+            calendarId='primary',
+            body=event
+        ).execute()
         
-        event = service.events().insert(calendarId='primary', body=event).execute()
-        app.logger.info(f"Evento creado: {event.get('htmlLink')}")
-        return True
+        # Programar recordatorio
+        programar_recordatorio(fecha, hora, telefono)
         
+        return event.get('htmlLink')
     except HttpError as error:
         app.logger.error(f"Error al crear evento: {error}")
-        return False
+        return None
     except Exception as e:
-        app.logger.error(f"Error inesperado: {e}")
-        return False
+        app.logger.error(f"Error inesperado al crear evento: {e}")
+        return None
 
-# ENVÍO DE CORREOS 
-def enviar_correo(destinatario, asunto, cuerpo):
-    """Envía un correo electrónico"""
+def programar_recordatorio(fecha, hora, telefono):
+    """Programa un recordatorio para la cita (implementación básica)"""
     try:
-        smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
-        smtp_port = int(os.getenv('SMTP_PORT', 587))
-        smtp_username = os.getenv('SMTP_USERNAME')
-        smtp_password = os.getenv('SMTP_PASSWORD')
-        
-        msg = MIMEMultipart()
-        msg['From'] = smtp_username
-        msg['To'] = destinatario
-        msg['Subject'] = asunto
-        msg.attach(MIMEText(cuerpo, 'plain'))
-        
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.starttls()
-            server.login(smtp_username, smtp_password)
-            server.send_message(msg)
-            
-        app.logger.info(f"Correo enviado a {destinatario}")
+        app.logger.info(f"Recordatorio programado para {fecha} {hora}, tel: {telefono}")
+    except Exception as e:
+        app.logger.error(f"Error al programar recordatorio: {e}")
+
+# ===================== FUNCIÓN DE CORREO =====================
+def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
+    remitente = os.getenv("EMAIL_USER")
+    password = os.getenv("EMAIL_PASSWORD")
+    
+    if not remitente or not password:
+        app.logger.error("Credenciales de email no configuradas")
+        return False
+    
+    mensaje = MIMEMultipart()
+    mensaje['From'] = remitente
+    mensaje['To'] = destinatario
+    mensaje['Subject'] = f"Nueva cita presencial agendada - {fecha} {hora}"
+    
+    cuerpo = f"""
+    📅 Nueva cita presencial agendada:
+    Fecha: {fecha}
+    Hora: {hora}
+    Teléfono: {telefono}
+    Síntoma principal: {sintoma}
+    
+    El paciente será contactado para confirmar cita.
+    """
+    mensaje.attach(MIMEText(cuerpo, 'plain'))
+    
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(remitente, password)
+            server.send_message(mensaje)
+        app.logger.info(f"Correo de confirmación enviado a {destinatario}")
         return True
-        
     except Exception as e:
         app.logger.error(f"Error enviando correo: {e}")
         return False
 
-# RUTAS FLASK 
-@app.route('/')
+# ===================== RUTAS PRINCIPALES =====================
+@app.route("/", methods=["GET", "POST"])
+@limiter.limit("30 per minute")
 def index():
-    """Página principal"""
-    # Limpiar sesión al inicio
-    session.clear()
-    
-    # Preparar datos para el template
-    fechas_validas = {
-        'min_sintoma': (datetime.now() - timedelta(days=365*2)).strftime('%Y-%m-%d'),
-        'max_sintoma': datetime.now().strftime('%Y-%m-%d'),
-        'min_cita': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
-        'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
-        'hoy': datetime.now().strftime('%Y-%m-%d')
-    }
-    
-    return render_template('index.html', 
-                         sintomas=sintomas_disponibles,
-                         estado="inicio",
-                         fechas_validas=fechas_validas)
+    # Inicializar o recuperar la conversación
+    if "conversacion_data" not in session:
+        conversacion = SistemaConversacional()
+        session.update({
+            "estado": "inicio",
+            "sintoma_actual": None,
+            "duracion_sintoma": None,
+            "fechas_validas": {
+                'hoy': datetime.now().strftime('%Y-%m-%d'),
+                'min_cita': datetime.now().strftime('%Y-%m-%d'),
+                'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
+                'min_sintoma': (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d'),
+                'max_sintoma': datetime.now().strftime('%Y-%m-%d')
+            },
+            "conversacion_data": conversacion.to_dict()
+        })
+    else:
+        # Recuperar la conversación desde el diccionario
+        conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
 
-@app.route('/procesar', methods=['POST'])
-@csrf.exempt
-def procesar():
-    """Procesa el formulario principal"""
-    try:
-        # Inicializar sistema conversacional si no existe
-        if 'sistema' not in session:
-            session['sistema'] = SistemaConversacional()
-            session['estado'] = 'inicio'
+    if request.method == "POST":
+        estado_actual = session["estado"]
 
-        sistema = session['sistema']
-        estado_actual = session['estado']
-
-        if estado_actual == 'inicio':
-            # Procesar selección de síntoma
-            sintoma = request.form.get('sintomas')
-            if not sintoma:
-                return redirect('/')
-            
-            session['sintoma_actual'] = sintoma
-            session['estado'] = 'evaluacion'
-            
-            # Agregar mensaje inicial del bot
-            sistema.agregar_interaccion('bot', f"He notado que mencionas {sintoma.lower()}. ¿Puedes contarme más sobre cómo te sientes?", sintoma)
-            
-            # Preparar fechas para el template
-            fechas_validas = {
-                'min_sintoma': (datetime.now() - timedelta(days=365*2)).strftime('%Y-%m-%d'),
-                'max_sintoma': datetime.now().strftime('%Y-%m-%d'),
-                'hoy': datetime.now().strftime('%Y-%m-%d')
-            }
-            
-            return render_template('index.html',
-                                sintomas=sintomas_disponibles,
-                                estado='evaluacion',
-                                conversacion=sistema,
-                                sintoma_actual=sintoma,
-                                fechas_validas=fechas_validas)
-
-        elif estado_actual == 'evaluacion':
-            # Procesar fecha de inicio del síntoma
-            fecha_inicio = request.form.get('fecha_inicio_sintoma')
-            duracion = calcular_duracion_dias(fecha_inicio)
-            
-            session['estado'] = 'profundizacion'
-            
-            # Agregar mensaje del bot sobre la duración
-            sistema.agregar_interaccion('bot', f"Entiendo. Has estado experimentando esto por aproximadamente {duracion} días. ¿Quieres contarme más sobre cómo te afecta en tu día a día?", session.get('sintoma_actual'))
-            
-            # Preparar fechas para citas
-            fechas_validas = {
-                'min_cita': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
-                'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
-            }
-            
-            return render_template('index.html',
-                                estado='profundizacion',
-                                conversacion=sistema,
-                                sintoma_actual=session.get('sintoma_actual'),
-                                fechas_validas=fechas_validas)
-
-        elif estado_actual in ['profundizacion', 'derivacion']:
-            # Procesar respuesta del usuario
-            user_input = sanitizar_input(request.form.get('user_input', ''))
-            
-            if "cita" in user_input.lower() or "agendar" in user_input.lower() or request.form.get('solicitar_cita'):
-                # Usuario quiere agendar cita
-                session['estado'] = 'agendar_cita'
-                sistema.agregar_interaccion('bot', "Entiendo que quieres agendar una cita. Por favor, completa los siguientes datos:")
+        if estado_actual == "inicio":
+            if sintomas := request.form.getlist("sintomas"):
+                if not sintomas:
+                    return render_template("index.html", error="Por favor selecciona un síntoma")
                 
-                fechas_validas = {
-                    'min_cita': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
-                    'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+                session["sintoma_actual"] = sintomas[0]
+                session["estado"] = "evaluacion"
+                conversacion.agregar_interaccion('bot', f"Entiendo que estás experimentando {sintomas[0].lower()}. ¿Desde cuándo lo notas?", sintomas[0])
+                app.logger.info(f"Usuario seleccionó síntoma: {sintomas[0]}")
+
+        elif estado_actual == "evaluacion":
+            if fecha := request.form.get("fecha_inicio_sintoma"):
+                session["duracion_sintoma"] = calcular_duracion_dias(fecha)
+                session["estado"] = "profundizacion"
+                
+                diferencia = session["duracion_sintoma"]
+                if diferencia < 30:
+                    comentario = "Es bueno que lo identifiques temprano."
+                elif diferencia < 365:
+                    comentario = "Varios meses con esto... debe ser difícil."
+                else:
+                    comentario = "Tu perseverancia es admirable."
+                
+                respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], "")
+                conversacion.agregar_interaccion('bot', f"{comentario} {respuesta}", session["sintoma_actual"])
+
+        elif estado_actual == "profundizacion":
+            if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
+                conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
+                
+                if any(palabra in user_input.lower() for palabra in ["cambiar", "otro tema"]):
+                    session["estado"] = "inicio"
+                    conversacion.agregar_interaccion('bot', "Claro, hablemos de otro tema. ¿Qué otro síntoma te gustaría discutir?", None)
+                
+                elif any(palabra in user_input.lower() for palabra in ["adiós", "gracias", "hasta luego"]):
+                    session["estado"] = "fin"
+                    conversacion.agregar_interaccion('bot', "Fue un gusto ayudarte. Recuerda que estoy aquí cuando me necesites. 💙", None)
+                
+                elif any(palabra in user_input.lower() for palabra in ["cita", "agendar", "doctor"]) or \
+                     necesita_profesional(session["sintoma_actual"], session["duracion_sintoma"], conversacion.historial):
+                    session["estado"] = "derivacion"
+                    conversacion.agregar_interaccion('bot', "Creo que sería bueno que hables con un profesional. ¿Quieres que te ayude a agendar una cita presencial?", session["sintoma_actual"])
+                
+                else:
+                    respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
+                    conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
+
+        elif estado_actual == "derivacion":
+            if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
+                conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
+                if any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita"]):
+                    session["estado"] = "agendar_cita"
+                    mensaje = (
+                        "Gracias por confiar en nosotros. Por favor completa los datos para tu cita presencial:\n\n"
+                        "📅 Fecha disponible: " + session["fechas_validas"]['hoy'] + "\n"
+                        "⏰ Horario de atención: 9:00 AM a 6:00 PM"
+                    )
+                    conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
+                else:
+                    conversacion.agregar_interaccion('bot', "Entiendo. ¿Quieres seguir hablando de esto o prefieres cambiar de tema?", session["sintoma_actual"])
+
+        elif estado_actual == "agendar_cita":
+            if fecha := request.form.get("fecha_cita"):
+                telefono = request.form.get("telefono", "").strip()
+
+                if not validar_telefono(telefono):
+                    conversacion.agregar_interaccion('bot', "⚠️ El teléfono debe comenzar con 09 y tener 10 dígitos numéricos. Por favor, ingrésalo de nuevo.", None)
+                    session["conversacion_data"] = conversacion.to_dict()
+                    return redirect(url_for("index"))
+
+                cita = {
+                    "fecha": fecha,
+                    "hora": request.form.get("hora_cita"),
+                    "telefono": telefono
                 }
-                
-                return render_template('index.html',
-                                    estado='agendar_cita',
-                                    conversacion=sistema,
-                                    fechas_validas=fechas_validas)
-            else:
-                # Continuar conversación normal
-                sintoma = session.get('sintoma_actual', 'Ansiedad')
-                sistema.agregar_interaccion('user', user_input, sintoma)
-                respuesta = sistema.obtener_respuesta(sintoma, user_input)
-                sistema.agregar_interaccion('bot', respuesta, sintoma)
-                
-                # Guardar sistema en sesión
-                session['sistema'] = sistema
-                
-                fechas_validas = {
-                    'min_cita': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
-                    'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
-                }
-                
-                return render_template('index.html',
-                                    estado='profundizacion',
-                                    conversacion=sistema,
-                                    sintoma_actual=sintoma,
-                                    fechas_validas=fechas_validas)
 
-        elif estado_actual == 'agendar_cita':
-            # Procesar agendamiento de cita
-            # Aquí iría la lógica para procesar el formulario de cita
-            session['estado'] = 'fin'
-            sistema.agregar_interaccion('bot', "¡Gracias! Tu cita ha sido agendada. Te enviaremos un recordatorio por correo.")
-            
-            return render_template('index.html',
-                                estado='fin',
-                                conversacion=sistema)
+                if not cita["hora"]:
+                    conversacion.agregar_interaccion('bot', "⚠️ Selecciona una hora válida", None)
+                else:
+                    evento_url = crear_evento_calendar(
+                        cita["fecha"],
+                        cita["hora"],
+                        cita["telefono"],
+                        session["sintoma_actual"]
+                    )
 
-    except Exception as e:
-        app.logger.error(f"Error en procesar: {e}")
-        return redirect('/')
+                    if evento_url:
+                        if enviar_correo_confirmacion(
+                            os.getenv("PSICOLOGO_EMAIL"),
+                            cita["fecha"],
+                            cita["hora"],
+                            cita["telefono"],
+                            session["sintoma_actual"]
+                        ):
+                            mensaje = (
+                                f"✅ Cita presencial confirmada para {cita['fecha']} a las {cita['hora']}. " 
+                                "Recibirás una llamada para coordinar tu consulta. " 
+                                "¡Gracias por confiar en nosotros!"
+                            )
+                        else:
+                            mensaje = "✅ Cita registrada (pero error al notificar al profesional)"
 
-@app.route('/reset', methods=['POST'])
+                        conversacion.agregar_interaccion('bot', mensaje, None)
+                        session["estado"] = "fin"
+                        app.logger.info(f"Cita agendada exitosamente: {cita}")
+                    else:
+                        conversacion.agregar_interaccion('bot', "❌ Error al agendar. Intenta nuevamente", None)
+                        app.logger.error(f"Error al agendar cita: {cita}")
+
+        session["conversacion_data"] = conversacion.to_dict()
+        return redirect(url_for("index"))
+
+    session["conversacion_data"] = conversacion.to_dict()
+    return render_template(
+        "index.html",
+        estado=session["estado"],
+        sintomas=sintomas_disponibles,
+        conversacion=conversacion,
+        sintoma_actual=session.get("sintoma_actual"),
+        fechas_validas=session["fechas_validas"]
+    )
+
+# ===================== RUTA RESET =====================
+@app.route("/reset", methods=["POST"])
 def reset():
-    """Reinicia la conversación"""
-    session.clear()
-    return jsonify({'status': 'success'})
+    try:
+        session.clear()
+        # Inicializar una nueva conversación
+        conversacion = SistemaConversacional()
+        session["conversacion_data"] = conversacion.to_dict()
+        session["estado"] = "inicio"
+        session["sintoma_actual"] = None
+        session["duracion_sintoma"] = None
+        
+        app.logger.info("Sesión reiniciada por el usuario")
+        return jsonify({"status": "success"})
+    except Exception as e:
+        app.logger.error(f"Error al reiniciar sesión: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-@app.route('/verificar-horario', methods=['POST'])
+# ===================== RUTAS ADICIONALES =====================
+@app.route("/verificar-horario", methods=["POST"])
 def verificar_horario():
-    """Verifica disponibilidad de horario"""
     try:
         data = request.get_json()
-        fecha = data.get('fecha')
-        hora = data.get('hora')
-        
-        # Simulación de verificación (en producción conectar con Google Calendar)
-        disponible = random.choice([True, True, True, False])
-        
-        return jsonify({
-            'disponible': disponible,
-            'mensaje': 'Horario disponible' if disponible else 'Horario no disponible'
-        })
-        
+        if not data or 'fecha' not in data or 'hora' not in data:
+            return jsonify({"error": "Datos incompletos"}), 400
+            
+        service = get_calendar_service()
+        if not service:
+            return jsonify({"error": "Servicio de calendario no disponible"}), 500
+            
+        eventos = service.events().list(
+            calendarId='primary',
+            timeMin=f"{data['fecha']}T{data['hora']}:00-05:00",
+            timeMax=f"{data['fecha']}T{int(data['hora'].split(':')[0])+1}:00:00-05:00",
+            singleEvents=True
+        ).execute()
+        return jsonify({"disponible": len(eventos.get('items', [])) == 0})
+    except HttpError as error:
+        app.logger.error(f"Error de Google API: {error}")
+        return jsonify({"error": str(error)}), 500
     except Exception as e:
-        app.logger.error(f"Error verificando horario: {e}")
-        return jsonify({'error': 'Error interno'}), 500
-
-@app.route('/solicitar-consulta', methods=['POST'])
-@limiter.limit("5 per hour")
-def solicitar_consulta():
-    """Procesa la solicitud de consulta"""
-    try:
-        data = request.form
-        
-        # Validar y sanitizar datos
-        nombre = sanitizar_input(data.get('nombre'))
-        email = sanitizar_input(data.get('email'))
-        telefono = sanitizar_input(data.get('telefono'))
-        fecha = data.get('fecha')
-        hora = data.get('hora')
-        motivo = sanitizar_input(data.get('motivo'))
-        
-        # Validaciones básicas
-        if not all([nombre, email, telefono, fecha, hora]):
-            return jsonify({'error': 'Todos los campos son obligatorios'}), 400
-            
-        if not validar_telefono(telefono):
-            return jsonify({'error': 'Teléfono inválido. Debe tener formato 09xxxxxxxx'}), 400
-        
-        # Crear evento en calendar (simulado por ahora)
-        evento_creado = True  # crear_evento_calendar(nombre, email, telefono, fecha, hora, motivo)
-        
-        if evento_creado:
-            # Enviar correo de confirmación (simulado por ahora)
-            # enviar_correo(email, "Confirmación de consulta", 
-            #              f"Hola {nombre}, tu consulta ha sido agendada para el {fecha} a las {hora}.")
-            
-            app.logger.info(f"Consulta agendada para {nombre} ({email})")
-            return jsonify({
-                'success': True, 
-                'mensaje': 'Consulta agendada correctamente. Te hemos enviado un correo de confirmación.'
-            })
-        else:
-            return jsonify({'error': 'Error al agendar la consulta. Intente nuevamente.'}), 500
-            
-    except Exception as e:
-        app.logger.error(f"Error solicitando consulta: {e}")
-        return jsonify({'error': 'Error interno del servidor'}), 500
-
-# HANDLERS DE ERROR 
-@app.errorhandler(404)
-def pagina_no_encontrada(error):
-    return jsonify({'error': 'Página no encontrada'}), 404
-
-@app.errorhandler(413)
-def demasiado_grande(error):
-    return jsonify({'error': 'Archivo demasiado grande'}), 413
+        app.logger.error(f"Error inesperado al verificar horario: {e}")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 @app.errorhandler(429)
-def demasiadas_solicitudes(error):
-    return jsonify({'error': 'Demasiadas solicitudes. Por favor, espere un momento.'}), 429
+def ratelimit_handler(e):
+    app.logger.warning(f"Límite de tasa excedido: {e}")
+    return jsonify({"error": "Demasiadas solicitudes. Por favor, intenta más tarde."}), 429
 
 @app.errorhandler(500)
-def error_interno(error):
-    return jsonify({'error': 'Error interno del servidor'}), 500
+def internal_error(error):
+    app.logger.error(f"Error interno del servidor: {error}")
+    return jsonify({"error": "Error interno del servidor"}), 500
 
-# EJECUCIÓN PRINCIPAL 
-if __name__ == '__main__':
-    # Configuración para Render
-    port = int(os.environ.get('PORT', 5000))
-    
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({"error": "Endpoint no encontrado"}), 404
+
+# ===================== CONFIGURACIÓN PARA RENDER =====================
+if __name__ == "__main__":
+    # Verificar variables de entorno críticas en producción
     if os.environ.get('FLASK_ENV') == 'production':
-        app.run(host='0.0.0.0', port=port)
-    else:
-        app.run(host='0.0.0.0', port=port, debug=True)
+        required_env_vars = ["FLASK_SECRET_KEY", "EMAIL_USER", "EMAIL_PASSWORD", "PSICOLOGO_EMAIL", "GOOGLE_CREDENTIALS"]
+        missing_vars = [var for var in required_env_vars if not os.getenv(var)]
+        
+        if missing_vars:
+            print(f"ERROR: Variables de entorno faltantes en producción: {missing_vars}")
+            exit(1)
+    
+    # Inicializar directorios necesarios
+    for directory in ["logs", "conversaciones"]:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    
+    # Usar el puerto que Render proporciona
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    
+    app.logger.info(f"Iniciando aplicación Equilibra en puerto {port}")
+    app.run(host='0.0.0.0', port=port, debug=debug)
