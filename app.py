@@ -15,6 +15,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import random
+import requests
 from environs import Env
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -63,6 +64,29 @@ else:
 
 if not os.path.exists("conversaciones"):
     os.makedirs("conversaciones")
+
+# ===================== FUNCIÓN PARA OLLAMA =====================
+def generar_respuesta_llm(prompt, modelo="mistral"):
+    """
+    Envía un prompt al modelo de Ollama y devuelve la respuesta generada.
+    """
+    try:
+        url = "http://localhost:11434/api/generate"
+        payload = {
+            "model": modelo,
+            "prompt": prompt,
+            "stream": False
+        }
+        response = requests.post(url, json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("response", "").strip()
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"Error de conexión con Ollama: {e}")
+        return None
+    except Exception as e:
+        app.logger.error(f"Error al generar respuesta con Ollama: {e}")
+        return None
 
 # ===================== FUNCIONES DE UTILIDAD =====================
 def sanitizar_input(texto):
@@ -362,7 +386,7 @@ respuestas_por_sintoma = {
     "Llanto frecuente": [
         "Llorar es una forma natural de liberar emociones contenidas.",
         "¿Sientes que lloras sin saber exactamente por qué?",
-        "No estás solo/a. Muchas personas pasan por esto más seguido de lo que imaginas.",
+        "No estás solo/a. Manyas personas pasan por esto más seguido de lo que imaginas.",
         "¿Qué suele pasar antes de que sientas ganas de llorar?",
         "Tu llanto también es una voz que pide ser escuchada.",
         "¿Hay algo que estés conteniendo desde hace tiempo?",
@@ -452,7 +476,7 @@ respuestas_por_sintoma = {
         "Recuerda que tu salud es prioridad y merece atención inmediata.",
         "¿Has evitado situaciones que aumentan la dificultad para respirar?",
         "Mantener la calma puede ayudarte a controlar la respiración.",
-        "Si la dificultad es constante, acude a un especialista pronto.",
+        "If la dificultad es constante, acude a un especialista pronto.",
         "Estoy aquí para escucharte y apoyarte.",
         "No estás solo/a, y hay ayuda para ti."
     ],
@@ -529,7 +553,7 @@ class SistemaConversacional:
         self.contexto_actual = None
 
     def obtener_respuesta_unica(self, sintoma):
-        """Obtiene una respuesta no utilizada para el síntoma"""
+        """Obtiene una respuesta no utilizada para el síntoma (fallback)"""
         respuestas_disponibles = [
             r for r in respuestas_por_sintoma.get(sintoma, []) 
             if r not in self.respuestas_usadas
@@ -561,12 +585,32 @@ class SistemaConversacional:
         return None
 
     def obtener_respuesta(self, sintoma, user_input):
-        # 1. Primero intentar análisis contextual
+        # 1. Filtro de seguridad (suicidio, autolesión, etc.)
+        if any(palabra in user_input.lower() for palabra in ["suicidio", "autolesión", "autoflagelo", "matarme", "no quiero vivir"]):
+            return "⚠️ Este tema es muy importante. Por favor, comunícate de inmediato con tu psicólogo o llama al número de emergencias 911."
+
+        # 2. Primero intentar análisis contextual
         respuesta_contextual = self.analizar_contexto(user_input)
         if respuesta_contextual:
             return respuesta_contextual
         
-        # 2. Usar el diccionario de respuestas por síntoma (sin repeticiones)
+        # 3. Intentar con Ollama (IA)
+        try:
+            prompt = f"""
+            Eres un asistente empático que ayuda a las personas a reflexionar sobre sus emociones.
+            El usuario menciona que siente: {sintoma}.
+            Ha dicho: "{user_input}".
+            Responde de manera comprensiva, breve y empática, sin reemplazar al psicólogo.
+            """
+            respuesta_ia = generar_respuesta_llm(prompt, modelo="mistral")
+            
+            # Verificar que la respuesta de IA sea válida
+            if respuesta_ia and len(respuesta_ia) > 10 and "Error" not in respuesta_ia:
+                return respuesta_ia
+        except Exception as e:
+            app.logger.error(f"Error al obtener respuesta de Ollama: {e}")
+        
+        # 4. Fallback a respuestas predefinidas
         return self.obtener_respuesta_unica(sintoma)
 
     def agregar_interaccion(self, tipo, mensaje, sintoma=None):
