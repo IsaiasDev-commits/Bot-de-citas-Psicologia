@@ -226,6 +226,14 @@
       animation: bounce 1.5s infinite ease-in-out;
     }
 
+    .typing-dots span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .typing-dots span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
     /* Formas */
     form {
       background-color: var(--surface);
@@ -391,7 +399,7 @@
       animation: shake 0.5s;
     }
 
-    /* Progress indicator - VERSIÓN CORREGIDA */
+    /* Progress indicator */
     .progress-indicator {
       display: flex;
       justify-content: space-between;
@@ -479,7 +487,7 @@
       }
       
       .progress-indicator::before {
-        display: none; /* Ocultamos la línea en móviles */
+        display: none;
       }
       
       .step {
@@ -571,7 +579,7 @@
     </div>
 
     {% if estado == "inicio" %}
-      <form method="POST" class="card" id="sintomasForm">
+      <form method="POST" action="/procesar" class="card" id="sintomasForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="radio-list">
           <p class="section-title">¿Cómo te sientes hoy? (Selecciona un síntoma)</p>
@@ -601,7 +609,7 @@
           </div>
         {% endfor %}
       </div>
-      <form method="POST" class="card">
+      <form method="POST" action="/procesar" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if sintoma_actual %}
           <p class="section-title">¿Desde cuándo experimentas {{ sintoma_actual.lower() }}?</p>
@@ -637,7 +645,7 @@
           </div>
         </div>
       </div>
-      <form method="POST" class="card">
+      <form method="POST" action="/procesar" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <textarea name="user_input" placeholder="Escribe tu respuesta aquí..." rows="3" required></textarea>
         <div class="form-row">
@@ -662,7 +670,7 @@
           </div>
         {% endfor %}
       </div>
-      <form method="POST" id="citaForm" class="card">
+      <form method="POST" action="/procesar" id="citaForm" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <p class="section-title">Selecciona una fecha para tu cita:</p>
         <input type="date" name="fecha_cita" min="{{ fechas_validas.min_cita }}" max="{{ fechas_validas.max_cita }}" required />
@@ -688,6 +696,8 @@
           El teléfono debe comenzar con 09 y tener 10 dígitos exactos
         </div>
         
+        <input type="hidden" name="solicitar_cita" value="true">
+        
         <div class="form-row">
           <input type="submit" value="Confirmar cita" id="submitCita" />
           <button type="button" class="btn-secondary" onclick="cancelarCita()">Cancelar</button>
@@ -710,10 +720,10 @@
           </div>
         {% endfor %}
       </div>
-      <form id="resetForm" class="card">
+      <div class="card">
         <p class="info-msg">Gracias por confiar en Equilibra. Siempre estamos aquí cuando nos necesites.</p>
         <button type="button" onclick="reiniciarChat()">Nueva conversación</button>
-      </form>
+      </div>
     {% endif %}
   </div>
 
@@ -744,7 +754,9 @@
     // ===================== CHAT =====================
     function scrollToBottom() {
       const chatBox = document.getElementById('chatBox');
-      if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+      if (chatBox) {
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
     }
 
     function mostrarEscribiendo() {
@@ -757,14 +769,38 @@
 
     function ocultarEscribiendo() {
       const indicator = document.getElementById('typingIndicator');
-      if (indicator) indicator.style.display = 'none';
+      if (indicator) {
+        indicator.style.display = 'none';
+      }
     }
 
     function solicitarCita() {
       mostrarEscribiendo();
+      
+      // Crear un formulario oculto para enviar la solicitud de cita
       const form = document.createElement('form');
       form.method = 'POST';
-      form.innerHTML = '<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="user_input" value="Quiero agendar una cita">';
+      form.action = '/procesar';
+      
+      const csrfToken = document.createElement('input');
+      csrfToken.type = 'hidden';
+      csrfToken.name = 'csrf_token';
+      csrfToken.value = '{{ csrf_token() }}';
+      
+      const userInput = document.createElement('input');
+      userInput.type = 'hidden';
+      userInput.name = 'user_input';
+      userInput.value = 'Quiero agendar una cita';
+      
+      const solicitarCita = document.createElement('input');
+      solicitarCita.type = 'hidden';
+      solicitarCita.name = 'solicitar_cita';
+      solicitarCita.value = 'true';
+      
+      form.appendChild(csrfToken);
+      form.appendChild(userInput);
+      form.appendChild(solicitarCita);
+      
       document.body.appendChild(form);
       form.submit();
     }
@@ -842,18 +878,22 @@
     }
 
     async function cargarHorariosDisponibles(fecha) {
+      if (!fecha) return;
+      
       const fechaObj = new Date(fecha);
       const dia = fechaObj.getDay();
 
-      selectHora.disabled = true;
-      cargandoHorarios.style.display = "block";
-      sinAtencion.style.display = "none";
+      if (selectHora) selectHora.disabled = true;
+      if (cargandoHorarios) cargandoHorarios.style.display = "block";
+      if (sinAtencion) sinAtencion.style.display = "none";
 
       if (dia === 6) {
-        selectHora.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
-        selectHora.disabled = true;
-        sinAtencion.style.display = "block";
-        cargandoHorarios.style.display = "none";
+        if (selectHora) {
+          selectHora.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
+          selectHora.disabled = true;
+        }
+        if (sinAtencion) sinAtencion.style.display = "block";
+        if (cargandoHorarios) cargandoHorarios.style.display = "none";
         return;
       }
 
@@ -869,9 +909,11 @@
         }
       }
       
-      selectHora.innerHTML = optionsHTML;
-      selectHora.disabled = false;
-      cargandoHorarios.style.display = "none";
+      if (selectHora) {
+        selectHora.innerHTML = optionsHTML;
+        selectHora.disabled = false;
+      }
+      if (cargandoHorarios) cargandoHorarios.style.display = "none";
     }
 
     if (fechaCitaInput && selectHora) {
@@ -880,13 +922,17 @@
       });
 
       fechaCitaInput.addEventListener('input', function() {
-        const fecha = new Date(this.value + 'T00:00');
-        if (fecha.getDay() === 0) {
-          this.value = "";
-          selectHora.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
-          selectHora.disabled = true;
-          sinAtencion.style.display = "block";
-          cargandoHorarios.style.display = "none";
+        if (this.value) {
+          const fecha = new Date(this.value + 'T00:00');
+          if (fecha.getDay() === 0) {
+            this.value = "";
+            if (selectHora) {
+              selectHora.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
+              selectHora.disabled = true;
+            }
+            if (sinAtencion) sinAtencion.style.display = "block";
+            if (cargandoHorarios) cargandoHorarios.style.display = "none";
+          }
         }
       });
 
@@ -927,10 +973,10 @@
         
         if (!validarTelefono(valor)) {
           this.classList.add('error');
-          telefonoError.style.display = 'block';
+          if (telefonoError) telefonoError.style.display = 'block';
         } else {
           this.classList.remove('error');
-          telefonoError.style.display = 'none';
+          if (telefonoError) telefonoError.style.display = 'none';
         }
       });
 
@@ -939,7 +985,7 @@
         if (!validarTelefono(telefonoInput.value)) {
           e.preventDefault();
           telefonoInput.classList.add('error');
-          telefonoError.style.display = 'block';
+          if (telefonoError) telefonoError.style.display = 'block';
           telefonoInput.focus();
         }
       });
@@ -947,14 +993,14 @@
       telefonoInput.addEventListener('focus', function() {
         if (!validarTelefono(this.value)) {
           this.classList.add('error');
-          telefonoError.style.display = 'block';
+          if (telefonoError) telefonoError.style.display = 'block';
         }
       });
 
       telefonoInput.addEventListener('blur', function() {
         if (validarTelefono(this.value)) {
           this.classList.remove('error');
-          telefonoError.style.display = 'none';
+          if (telefonoError) telefonoError.style.display = 'none';
         }
       });
     }
@@ -970,7 +1016,9 @@
     });
 
     // Evitar zoom con doble toque
-    document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+    document.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+    }, { passive: false });
 
     // Ajustar input de fecha en móviles
     if (window.innerWidth < 600 && document.querySelector('input[name="fecha_cita"]')) {
@@ -986,7 +1034,9 @@
 
     // Mostrar escribiendo al cargar la página 
     if (document.getElementById('typingIndicator')) {
-      scrollToBottom();
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
     }
 
     // Validación de selección única en síntomas
@@ -1000,11 +1050,23 @@
 
     // Navegación con teclado mejorada
     document.addEventListener('keydown', function(e) {
-      // Atajos de teclado
       if (e.key === 'Escape') {
         reiniciarChat();
       }
+      if (e.key === 'Enter' && e.ctrlKey) {
+        const submitBtn = document.querySelector('form input[type="submit"], form button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.click();
+        }
+      }
     });
- </script>
+
+    // Auto-scroll al cargar la página
+    window.addEventListener('load', () => {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 300);
+    });
+  </script>
 </body>
 </html>

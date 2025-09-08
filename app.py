@@ -20,9 +20,9 @@ from environs import Env
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
-from markupsafe import escape  # ✅ Escapar HTML
+from markupsafe import escape
 
-#CONFIGURACIÓN INICIAL 
+# CONFIGURACIÓN INICIAL 
 load_dotenv()
 env = Env()
 env.read_env()
@@ -43,8 +43,8 @@ if os.environ.get('FLASK_ENV') == 'production':
     app.config.update(
         DEBUG=False,
         TESTING=False,
-        SESSION_COOKIE_SECURE=True,   # Solo en HTTPS
-        SESSION_COOKIE_HTTPONLY=True, # No accesible por JS
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax"
     )
 else:
@@ -57,7 +57,7 @@ csrf = CSRFProtect(app)
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["1000 per day", "200 per hour"],  # Límites más generosos
+    default_limits=["1000 per day", "200 per hour"],
     storage_uri="memory://"
 )
 
@@ -138,7 +138,7 @@ sintomas_disponibles = [
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
 
-# Respuestas por síntoma 
+# Respuestas por síntoma (versión abreviada)
 respuestas_por_sintoma = {
     "Ansiedad": [
          "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
@@ -550,7 +550,6 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-
 # SISTEMA CONVERSACIONAL 
 class SistemaConversacional:
     def __init__(self):
@@ -609,7 +608,7 @@ class SistemaConversacional:
         if respuesta_contextual:
             return respuesta_contextual
 
-        
+        # Intenta usar Ollama si está disponible
         try:
             prompt = f"""
             Eres un asistente empático que ayuda a las personas a reflexionar sobre sus emociones.
@@ -628,7 +627,6 @@ class SistemaConversacional:
 
     def agregar_interaccion(self, tipo, mensaje, sintoma=None):
         """Registra interacciones sin datos sensibles"""
-        # ✅ No guardamos datos sensibles en logs
         self.historial.append({
             'tipo': tipo,
             'mensaje': mensaje,
@@ -656,7 +654,6 @@ def crear_evento_calendar(nombre, email, telefono, fecha, hora, motivo):
         if not service:
             return False
 
-        
         start_datetime = datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
         end_datetime = start_datetime + timedelta(hours=1)
         
@@ -701,20 +698,17 @@ def crear_evento_calendar(nombre, email, telefono, fecha, hora, motivo):
 def enviar_correo(destinatario, asunto, cuerpo):
     """Envía un correo electrónico"""
     try:
-        # Configuración del servidor SMTP
         smtp_server = os.getenv('SMTP_SERVER', 'smtp.gmail.com')
         smtp_port = int(os.getenv('SMTP_PORT', 587))
         smtp_username = os.getenv('SMTP_USERNAME')
         smtp_password = os.getenv('SMTP_PASSWORD')
         
-        # Crear mensaje
         msg = MIMEMultipart()
         msg['From'] = smtp_username
         msg['To'] = destinatario
         msg['Subject'] = asunto
         msg.attach(MIMEText(cuerpo, 'plain'))
         
-        # Enviar correo
         with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls()
             server.login(smtp_username, smtp_password)
@@ -731,8 +725,136 @@ def enviar_correo(destinatario, asunto, cuerpo):
 @app.route('/')
 def index():
     """Página principal"""
+    # Limpiar sesión al inicio
     session.clear()
-    return render_template('index.html', sintomas=sintomas_disponibles)
+    
+    # Preparar datos para el template
+    fechas_validas = {
+        'min_sintoma': (datetime.now() - timedelta(days=365*2)).strftime('%Y-%m-%d'),
+        'max_sintoma': datetime.now().strftime('%Y-%m-%d'),
+        'min_cita': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
+        'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
+        'hoy': datetime.now().strftime('%Y-%m-%d')
+    }
+    
+    return render_template('index.html', 
+                         sintomas=sintomas_disponibles,
+                         estado="inicio",
+                         fechas_validas=fechas_validas)
+
+@app.route('/procesar', methods=['POST'])
+@csrf.exempt
+def procesar():
+    """Procesa el formulario principal"""
+    try:
+        # Inicializar sistema conversacional si no existe
+        if 'sistema' not in session:
+            session['sistema'] = SistemaConversacional()
+            session['estado'] = 'inicio'
+
+        sistema = session['sistema']
+        estado_actual = session['estado']
+
+        if estado_actual == 'inicio':
+            # Procesar selección de síntoma
+            sintoma = request.form.get('sintomas')
+            if not sintoma:
+                return redirect('/')
+            
+            session['sintoma_actual'] = sintoma
+            session['estado'] = 'evaluacion'
+            
+            # Agregar mensaje inicial del bot
+            sistema.agregar_interaccion('bot', f"He notado que mencionas {sintoma.lower()}. ¿Puedes contarme más sobre cómo te sientes?", sintoma)
+            
+            # Preparar fechas para el template
+            fechas_validas = {
+                'min_sintoma': (datetime.now() - timedelta(days=365*2)).strftime('%Y-%m-%d'),
+                'max_sintoma': datetime.now().strftime('%Y-%m-%d'),
+                'hoy': datetime.now().strftime('%Y-%m-%d')
+            }
+            
+            return render_template('index.html',
+                                sintomas=sintomas_disponibles,
+                                estado='evaluacion',
+                                conversacion=sistema,
+                                sintoma_actual=sintoma,
+                                fechas_validas=fechas_validas)
+
+        elif estado_actual == 'evaluacion':
+            # Procesar fecha de inicio del síntoma
+            fecha_inicio = request.form.get('fecha_inicio_sintoma')
+            duracion = calcular_duracion_dias(fecha_inicio)
+            
+            session['estado'] = 'profundizacion'
+            
+            # Agregar mensaje del bot sobre la duración
+            sistema.agregar_interaccion('bot', f"Entiendo. Has estado experimentando esto por aproximadamente {duracion} días. ¿Quieres contarme más sobre cómo te afecta en tu día a día?", session.get('sintoma_actual'))
+            
+            # Preparar fechas para citas
+            fechas_validas = {
+                'min_cita': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
+                'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+            }
+            
+            return render_template('index.html',
+                                estado='profundizacion',
+                                conversacion=sistema,
+                                sintoma_actual=session.get('sintoma_actual'),
+                                fechas_validas=fechas_validas)
+
+        elif estado_actual in ['profundizacion', 'derivacion']:
+            # Procesar respuesta del usuario
+            user_input = sanitizar_input(request.form.get('user_input', ''))
+            
+            if "cita" in user_input.lower() or "agendar" in user_input.lower() or request.form.get('solicitar_cita'):
+                # Usuario quiere agendar cita
+                session['estado'] = 'agendar_cita'
+                sistema.agregar_interaccion('bot', "Entiendo que quieres agendar una cita. Por favor, completa los siguientes datos:")
+                
+                fechas_validas = {
+                    'min_cita': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
+                    'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+                }
+                
+                return render_template('index.html',
+                                    estado='agendar_cita',
+                                    conversacion=sistema,
+                                    fechas_validas=fechas_validas)
+            else:
+                # Continuar conversación normal
+                sintoma = session.get('sintoma_actual', 'Ansiedad')
+                sistema.agregar_interaccion('user', user_input, sintoma)
+                respuesta = sistema.obtener_respuesta(sintoma, user_input)
+                sistema.agregar_interaccion('bot', respuesta, sintoma)
+                
+                # Guardar sistema en sesión
+                session['sistema'] = sistema
+                
+                fechas_validas = {
+                    'min_cita': (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d'),
+                    'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d')
+                }
+                
+                return render_template('index.html',
+                                    estado='profundizacion',
+                                    conversacion=sistema,
+                                    sintoma_actual=sintoma,
+                                    fechas_validas=fechas_validas)
+
+        elif estado_actual == 'agendar_cita':
+            # Procesar agendamiento de cita
+            # Aquí iría la lógica para procesar el formulario de cita
+            session['estado'] = 'fin'
+            sistema.agregar_interaccion('bot', "¡Gracias! Tu cita ha sido agendada. Te enviaremos un recordatorio por correo.")
+            
+            return render_template('index.html',
+                                estado='fin',
+                                conversacion=sistema)
+
+    except Exception as e:
+        app.logger.error(f"Error en procesar: {e}")
+        return redirect('/')
 
 @app.route('/reset', methods=['POST'])
 def reset():
@@ -748,9 +870,8 @@ def verificar_horario():
         fecha = data.get('fecha')
         hora = data.get('hora')
         
-        
-        
-        disponible = random.choice([True, True, True, False])  
+        # Simulación de verificación (en producción conectar con Google Calendar)
+        disponible = random.choice([True, True, True, False])
         
         return jsonify({
             'disponible': disponible,
@@ -761,74 +882,8 @@ def verificar_horario():
         app.logger.error(f"Error verificando horario: {e}")
         return jsonify({'error': 'Error interno'}), 500
 
-@app.route('/procesar-mensaje', methods=['POST'])
-@limiter.limit("10 per minute")  
-@csrf.exempt  
-def procesar_mensaje():
-    """Procesa los mensajes del chat"""
-    try:
-        data = request.get_json()
-        user_input = sanitizar_input(data.get('mensaje', ''))
-        
-        if not user_input:
-            return jsonify({'error': 'Mensaje vacío'}), 400
-        
-        # Inicializar sistema conversacional si no existe
-        if 'sistema' not in session:
-            session['sistema'] = SistemaConversacional()
-            session['estado'] = 'inicio'
-        
-        sistema = session['sistema']
-        estado = session['estado']
-        
-        # Lógica de estados de la conversación
-        if estado == 'inicio':
-            sistema.agregar_interaccion('usuario', user_input)
-            sistema.agregar_interaccion('sistema', 'Hola, ¿en qué puedo ayudarte hoy?')
-            session['estado'] = 'esperando_sintoma'
-            return jsonify({
-                'respuesta': 'Hola, ¿en qué puedo ayudarte hoy?',
-                'estado': 'esperando_sintoma'
-            })
-            
-        elif estado == 'esperando_sintoma':
-            
-            
-            sintoma = "Ansiedad"  
-            
-            sistema.agregar_interaccion('usuario', user_input, sintoma)
-            respuesta = sistema.obtener_respuesta(sintoma, user_input)
-            sistema.agregar_interaccion('sistema', respuesta, sintoma)
-            
-            session['sintoma_actual'] = sintoma
-            session['estado'] = 'conversando'
-            
-            return jsonify({
-                'respuesta': respuesta,
-                'estado': 'conversando',
-                'sintoma': sintoma
-            })
-            
-        elif estado == 'conversando':
-            sintoma = session.get('sintoma_actual', 'Ansiedad')
-            sistema.agregar_interaccion('usuario', user_input, sintoma)
-            respuesta = sistema.obtener_respuesta(sintoma, user_input)
-            sistema.agregar_interaccion('sistema', respuesta, sintoma)
-            
-            
-            session['sistema'] = sistema
-            
-            return jsonify({
-                'respuesta': respuesta,
-                'estado': 'conversando'
-            })
-            
-    except Exception as e:
-        app.logger.error(f"Error procesando mensaje: {e}")
-        return jsonify({'error': 'Error interno del servidor'}), 500
-
 @app.route('/solicitar-consulta', methods=['POST'])
-@limiter.limit("5 per hour")  # para prevenir spam
+@limiter.limit("5 per hour")
 def solicitar_consulta():
     """Procesa la solicitud de consulta"""
     try:
@@ -892,8 +947,6 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     
     if os.environ.get('FLASK_ENV') == 'production':
-        # En producción, usar un servidor WSGI como Gunicorn
         app.run(host='0.0.0.0', port=port)
     else:
-        # En desarrollo, usar el servidor de desarrollo de Flask
         app.run(host='0.0.0.0', port=port, debug=True)
