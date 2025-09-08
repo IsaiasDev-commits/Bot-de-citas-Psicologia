@@ -718,7 +718,7 @@
   </div>
 
   <script>
-    // TEMA 
+    // ===================== TEMA =====================
     function setTheme(theme) {
       document.body.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
@@ -741,7 +741,7 @@
       setTheme('dark');
     }
 
-    // CHAT 
+    // ===================== CHAT =====================
     function scrollToBottom() {
       const chatBox = document.getElementById('chatBox');
       if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
@@ -769,7 +769,7 @@
       form.submit();
     }
 
-    // REINICIAR CHAT 
+    // ===================== REINICIAR CHAT =====================
     async function reiniciarChat() {
       mostrarEscribiendo();
       const btn = event.target.closest('button') || event.target;
