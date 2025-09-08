@@ -579,7 +579,7 @@
     </div>
 
     {% if estado == "inicio" %}
-      <form method="POST" action="/procesar" class="card" id="sintomasForm">
+      <form method="POST" action="/" class="card" id="sintomasForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="radio-list">
           <p class="section-title">¿Cómo te sientes hoy? (Selecciona un síntoma)</p>
@@ -609,7 +609,7 @@
           </div>
         {% endfor %}
       </div>
-      <form method="POST" action="/procesar" class="card">
+      <form method="POST" action="/" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {% if sintoma_actual %}
           <p class="section-title">¿Desde cuándo experimentas {{ sintoma_actual.lower() }}?</p>
@@ -645,7 +645,7 @@
           </div>
         </div>
       </div>
-      <form method="POST" action="/procesar" class="card">
+      <form method="POST" action="/" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <textarea name="user_input" placeholder="Escribe tu respuesta aquí..." rows="3" required></textarea>
         <div class="form-row">
@@ -670,7 +670,7 @@
           </div>
         {% endfor %}
       </div>
-      <form method="POST" action="/procesar" id="citaForm" class="card">
+      <form method="POST" action="/" id="citaForm" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <p class="section-title">Selecciona una fecha para tu cita:</p>
         <input type="date" name="fecha_cita" min="{{ fechas_validas.min_cita }}" max="{{ fechas_validas.max_cita }}" required />
@@ -780,7 +780,7 @@
       // Crear un formulario oculto para enviar la solicitud de cita
       const form = document.createElement('form');
       form.method = 'POST';
-      form.action = '/procesar';
+      form.action = '/';
       
       const csrfToken = document.createElement('input');
       csrfToken.type = 'hidden';
