@@ -391,20 +391,22 @@
       animation: shake 0.5s;
     }
 
-    /* Progress indicator */
+    /* Progress indicator - VERSIÓN CORREGIDA */
     .progress-indicator {
       display: flex;
       justify-content: space-between;
       margin-bottom: var(--space-lg);
       position: relative;
+      flex-wrap: wrap;
+      gap: var(--space-xs);
     }
 
     .progress-indicator::before {
       content: '';
       position: absolute;
       top: 50%;
-      left: 0;
-      right: 0;
+      left: 5%;
+      right: 5%;
       height: 2px;
       background-color: var(--divider);
       transform: translateY(-50%);
@@ -415,10 +417,13 @@
       position: relative;
       z-index: 2;
       background-color: var(--surface);
-      padding: var(--space-sm) var(--space-md);
+      padding: var(--space-xs) var(--space-sm);
       border-radius: var(--radius-sm);
-      font-size: 0.8rem;
+      font-size: 0.7rem;
       border: 1px solid var(--divider);
+      text-align: center;
+      min-width: 60px;
+      flex: 1;
     }
 
     .step.active {
@@ -469,18 +474,19 @@
       }
 
       .progress-indicator {
-        flex-wrap: wrap;
-        gap: var(--space-sm);
+        justify-content: center;
+        gap: var(--space-xs);
       }
       
       .progress-indicator::before {
-        display: none;
+        display: none; /* Ocultamos la línea en móviles */
       }
       
       .step {
-        flex: 1;
-        text-align: center;
-        min-width: 60px;
+        font-size: 0.65rem;
+        padding: 6px 8px;
+        min-width: 50px;
+        flex: none;
       }
     }
 
@@ -712,7 +718,7 @@
   </div>
 
   <script>
-    // ===================== TEMA =====================
+    // TEMA 
     function setTheme(theme) {
       document.body.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
@@ -735,7 +741,7 @@
       setTheme('dark');
     }
 
-    // ===================== CHAT =====================
+    // CHAT 
     function scrollToBottom() {
       const chatBox = document.getElementById('chatBox');
       if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
@@ -763,7 +769,7 @@
       form.submit();
     }
 
-    // ===================== REINICIAR CHAT =====================
+    // REINICIAR CHAT 
     async function reiniciarChat() {
       mostrarEscribiendo();
       const btn = event.target.closest('button') || event.target;
