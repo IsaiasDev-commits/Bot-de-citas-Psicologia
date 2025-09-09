@@ -577,7 +577,6 @@ class SistemaConversacional:
 
     def obtener_respuesta_unica(self, sintoma):
         """Obtiene una respuesta no utilizada para el síntoma (fallback)"""
-        # Aquí irían tus respuestas por síntoma - las agregarás después
         return "¿Puedes contarme más sobre cómo te sientes?"
 
     def analizar_contexto(self, user_input):
@@ -731,20 +730,23 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
 @app.route("/", methods=["GET", "POST"])
 @limiter.limit("30 per minute")
 def index():
-    # Inicializar o recuperar la conversación
+    # ✅ Asegurar que fechas_validas siempre exista en la sesión (PRIMERO)
+    if "fechas_validas" not in session:
+        session["fechas_validas"] = {
+            'hoy': datetime.now().strftime('%Y-%m-%d'),
+            'min_cita': datetime.now().strftime('%Y-%m-%d'),
+            'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
+            'min_sintoma': (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d'),
+            'max_sintoma': datetime.now().strftime('%Y-%m-%d')
+        }
+
+    # ✅ Inicializar o recuperar la conversación (DESPUÉS)
     if "conversacion_data" not in session:
         conversacion = SistemaConversacional()
         session.update({
             "estado": "inicio",
             "sintoma_actual": None,
             "duracion_sintoma": None,
-            "fechas_validas": {
-                'hoy': datetime.now().strftime('%Y-%m-%d'),
-                'min_cita': datetime.now().strftime('%Y-%m-%d'),
-                'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
-                'min_sintoma': (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d'),
-                'max_sintoma': datetime.now().strftime('%Y-%m-%d')
-            },
             "conversacion_data": conversacion.to_dict()
         })
     else:
@@ -881,12 +883,19 @@ def index():
 def reset():
     try:
         session.clear()
-        # Inicializar una nueva conversación
+        # Inicializar una nueva conversación con fechas_validas
         conversacion = SistemaConversacional()
         session["conversacion_data"] = conversacion.to_dict()
         session["estado"] = "inicio"
         session["sintoma_actual"] = None
         session["duracion_sintoma"] = None
+        session["fechas_validas"] = {
+            'hoy': datetime.now().strftime('%Y-%m-%d'),
+            'min_cita': datetime.now().strftime('%Y-%m-%d'),
+            'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
+            'min_sintoma': (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d'),
+            'max_sintoma': datetime.now().strftime('%Y-%m-%d')
+        }
         
         app.logger.info("Sesión reiniciada por el usuario")
         return jsonify({"status": "success"})
