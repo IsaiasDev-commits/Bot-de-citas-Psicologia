@@ -73,7 +73,7 @@ if not os.path.exists("conversaciones"):
     os.makedirs("conversaciones")
 
 # ===================== FUNCIÓN PARA GROQ API =====================
-def generar_respuesta_llm(prompt, modelo="mixtral-8x7b-32768"):
+def generar_respuesta_llm(prompt, modelo="llama3-70b-8192"):
     """
     Envía un prompt al modelo de Groq y devuelve la respuesta generada.
     Modelos disponibles: llama3-8b-8192, llama3-70b-8192, mixtral-8x7b-32768, gemma-7b-it
@@ -87,19 +87,22 @@ def generar_respuesta_llm(prompt, modelo="mixtral-8x7b-32768"):
         payload = {
             "model": modelo,
             "messages": [
-                {"role": "system", "content": "Eres un asistente empático que ayuda a las personas a reflexionar sobre sus emociones."},
+                {"role": "system", "content": "Eres un asistente psicológico empático y profesional. Tu objetivo es ayudar a las personas a reflexionar sobre sus emociones y, cuando sea apropiado, sugerir una cita con un psicólogo profesional. Responde de manera comprensiva, breve (máximo 2-3 oraciones) y natural. Después de algunas interacciones o cuando el usuario lo solicite, sugiere amablemente una cita presencial."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.7
+            "temperature": 0.7,
+            "max_tokens": 150
         }
         response = requests.post(url, headers=headers, json=payload, timeout=20)
         response.raise_for_status()
         data = response.json()
         return data["choices"][0]["message"]["content"].strip()
     except requests.exceptions.RequestException as e:
-        return f"Error de conexión con Groq: {e}"
+        app.logger.error(f"Error de conexión con Groq: {e}")
+        return None
     except Exception as e:
-        return f"Error al generar respuesta con Groq: {e}"
+        app.logger.error(f"Error al generar respuesta con Groq: {e}")
+        return None
 
 # ===================== FUNCIONES DE UTILIDAD =====================
 def sanitizar_input(texto):
@@ -548,7 +551,6 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-
 # ===================== SISTEMA CONVERSACIONAL MEJORADO =====================
 class SistemaConversacional:
     def __init__(self):
@@ -587,12 +589,12 @@ class SistemaConversacional:
             Eres un asistente psicológico empático. El usuario está experimentando: {sintoma}.
             Su último mensaje: "{user_input}"
 
-            Responde de manera comprensiva y breve (máximo 2 oraciones), ayudando a reflexionar
-            sobre emociones sin dar diagnóstico médico. Después de unas pocas interacciones,
-            deberás sugerir amablemente una cita con un psicólogo profesional.
+            Responde de manera comprensiva y breve (máximo 2-3 oraciones), ayudando a reflexionar
+            sobre emociones sin dar diagnóstico médico. Si el usuario parece necesitar ayuda profesional
+            o menciona querer una cita, sugiere amablemente agendar una cita con un psicólogo.
             """
             
-            respuesta = generar_respuesta_llm(prompt, modelo="mixtral-8x7b-32768")
+            respuesta = generar_respuesta_llm(prompt, modelo="llama3-70b-8192")
             
             # Verificar si la respuesta es válida (no un error)
             if respuesta and not respuesta.startswith("Error"):
@@ -610,15 +612,19 @@ class SistemaConversacional:
         if any(palabra in user_input.lower() for palabra in palabras_crisis):
             return "⚠️ Este tema es muy importante. Por favor, comunícate de inmediato con tu psicólogo o llama al número de emergencias 911."
 
-        # 2. Si hemos alcanzado el límite de interacciones, sugerir cita
-        if self.contador_interacciones >= 10:
-            return "Ha sido un gusto conversar contigo. Creo que sería muy beneficioso que continúes esta conversación con un psicólogo profesional. ¿Te gustaría agendar una cita presencial?"
+        # 2. Verificar si el usuario solicita cita explícitamente
+        if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia"]):
+            return "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial?"
 
-        # 3. Intentar con IA o usar respuesta predefinida
-        respuesta = self.obtener_respuesta_ia(sintoma, user_input)
+        # 3. Intentar con IA primero, luego fallback a predefinida
+        respuesta_ia = self.obtener_respuesta_ia(sintoma, user_input)
         self.contador_interacciones += 1
         
-        return respuesta
+        # 4. Si después de algunas interacciones, sugerir cita suavemente
+        if self.contador_interacciones >= 3 and not any(palabra in respuesta_ia.lower() for palabra in ["cita", "profesional", "psicólogo"]):
+            respuesta_ia += " ¿Has considerado hablar con un psicólogo profesional? Podría ser de gran ayuda."
+        
+        return respuesta_ia
 
     def agregar_interaccion(self, tipo, mensaje, sintoma=None):
         self.historial.append({
@@ -766,10 +772,10 @@ def index():
             if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                # Verificar si debemos sugerir cita (límite de interacciones alcanzado)
-                if conversacion.contador_interacciones >= 10:
+                # Verificar si el usuario solicita cita explícitamente
+                if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]):
                     session["estado"] = "derivacion"
-                    conversacion.agregar_interaccion('bot', "Ha sido un gusto conversar contigo. Creo que sería muy beneficioso que continúes esta conversación con un psicólogo profesional. ¿Te gustaría agendar una cita presencial?", session["sintoma_actual"])
+                    conversacion.agregar_interaccion('bot', "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial?", session["sintoma_actual"])
                 else:
                     respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
                     conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
@@ -777,7 +783,7 @@ def index():
         elif estado_actual == "derivacion":
             if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
-                if any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale"]):
+                if any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale", "por favor"]):
                     session["estado"] = "agendar_cita"
                     mensaje = (
                         "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
@@ -787,8 +793,9 @@ def index():
                     )
                     conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
                 else:
-                    session["estado"] = "fin"
-                    conversacion.agregar_interaccion('bot', "Entiendo. Recuerda que estoy aquí cuando necesites apoyo. Cuídate mucho. 💙", None)
+                    session["estado"] = "profundizacion"
+                    respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
+                    conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
 
         elif estado_actual == "agendar_cita":
             if fecha := request.form.get("fecha_cita"):
@@ -919,7 +926,7 @@ def not_found(error):
 if __name__ == "__main__":
     # Verificar variables de entorno críticas en producción
     if os.environ.get('FLASK_ENV') == 'production':
-        required_env_vars = ["FLASK_SECRET_KEY", "EMAIL_USER", "EMAIL_PASSWORD", "PSICOLOGO_EMAIL", "GOOGLE_CREDENTIALS"]
+        required_env_vars = ["FLASK_SECRET_KEY", "EMAIL_USER", "EMAIL_PASSWORD", "PSICOLOGO_EMAIL", "GOOGLE_CREDENTIALS", "GROQ_API_KEY"]
         missing_vars = [var for var in required_env_vars if not os.getenv(var)]
         
         if missing_vars:
