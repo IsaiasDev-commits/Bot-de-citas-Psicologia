@@ -452,15 +452,27 @@
       animation: shake 0.5s;
     }
 
-    /* Progress indicator MEJORADO */
+    /* Progress indicator MEJORADO - Horizontal en todos los dispositivos */
+    .progress-container {
+      margin-bottom: var(--space-lg);
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; /* Firefox */
+    }
+
+    .progress-container::-webkit-scrollbar {
+      display: none; /* Chrome, Safari */
+    }
+
     .progress-indicator {
       display: flex;
       justify-content: space-between;
-      margin-bottom: var(--space-lg);
       position: relative;
-      flex-wrap: wrap;
-      gap: var(--space-xs);
       counter-reset: step;
+      min-width: max-content;
+      padding: 0 var(--space-sm);
+      gap: var(--space-xs);
     }
 
     .progress-indicator::before {
@@ -486,11 +498,12 @@
       border: 2px solid var(--divider);
       text-align: center;
       min-width: 90px;
-      flex: 1;
+      flex-shrink: 0;
       display: flex;
       flex-direction: column;
       align-items: center;
       transition: all 0.3s ease;
+      white-space: nowrap;
     }
 
     .step::before {
@@ -584,29 +597,30 @@
         gap: var(--space-sm);
       }
 
-      .progress-indicator {
-        flex-direction: column;
-        align-items: center;
-        gap: var(--space-sm);
+      .progress-container {
+        padding-bottom: var(--space-xs);
       }
       
-      .progress-indicator::before {
-        display: none;
+      .progress-indicator {
+        gap: var(--space-xs);
+        padding: 0 var(--space-sm);
       }
       
       .step {
-        width: 100%;
-        max-width: 250px;
-        flex-direction: row;
-        justify-content: flex-start;
-        text-align: left;
-        padding: var(--space-sm) var(--space-md);
-        min-width: auto;
+        min-width: 80px;
+        padding: var(--space-xs) var(--space-sm);
+        font-size: 0.8rem;
       }
       
       .step::before {
-        margin-bottom: 0;
-        margin-right: var(--space-sm);
+        width: 24px;
+        height: 24px;
+        font-size: 0.8rem;
+      }
+      
+      /* Ocultar línea conectora en móviles */
+      .progress-indicator::before {
+        display: none;
       }
       
       .radio-list label {
@@ -620,14 +634,16 @@
       }
       
       .step {
-        font-size: 0.8rem;
-        padding: var(--space-xs) var(--space-sm);
+        min-width: 70px;
+        font-size: 0.75rem;
+        padding: 6px 8px;
       }
       
       .step::before {
-        width: 24px;
-        height: 24px;
-        font-size: 0.8rem;
+        width: 22px;
+        height: 22px;
+        font-size: 0.75rem;
+        margin-bottom: 2px;
       }
       
       .card {
@@ -724,13 +740,15 @@
       </div>
     </div>
 
-    <!-- Indicador de progreso MEJORADO -->
-    <div class="progress-indicator">
-      <div class="step {% if estado == 'inicio' %}active{% endif %}">Inicio</div>
-      <div class="step {% if estado == 'evaluacion' %}active{% endif %}">Evaluación</div>
-      <div class="step {% if estado in ['profundizacion', 'derivacion'] %}active{% endif %}">Diálogo</div>
-      <div class="step {% if estado == 'agendar_cita' %}active{% endif %}">Cita</div>
-      <div class="step {% if estado == 'fin' %}active{% endif %}">Final</div>
+    <!-- CONTENEDOR MEJORADO para progress indicator -->
+    <div class="progress-container">
+      <div class="progress-indicator">
+        <div class="step {% if estado == 'inicio' %}active{% endif %}">Inicio</div>
+        <div class="step {% if estado == 'evaluacion' %}active{% endif %}">Evaluación</div>
+        <div class="step {% if estado in ['profundizacion', 'derivacion'] %}active{% endif %}">Diálogo</div>
+        <div class="step {% if estado == 'agendar_cita' %}active{% endif %}">Cita</div>
+        <div class="step {% if estado == 'fin' %}active{% endif %}">Final</div>
+      </div>
     </div>
 
     {% if estado == "inicio" %}
@@ -1178,6 +1196,67 @@
         }
       });
     }
+
+    // Script para mejorar la experiencia táctil en móviles
+    document.addEventListener('DOMContentLoaded', function() {
+      const progressContainer = document.querySelector('.progress-container');
+      
+      if (progressContainer) {
+        // Hacer scroll suave al elemento activo en móviles
+        const activeStep = document.querySelector('.step.active');
+        if (activeStep && window.innerWidth < 768) {
+          setTimeout(() => {
+            progressContainer.scrollTo({
+              left: activeStep.offsetLeft - progressContainer.offsetWidth / 2 + activeStep.offsetWidth / 2,
+              behavior: 'smooth'
+            });
+          }, 300);
+        }
+
+        // Mejorar el desplazamiento táctil
+        let isDragging = false;
+        let startX;
+        let scrollLeft;
+
+        progressContainer.addEventListener('mousedown', (e) => {
+          isDragging = true;
+          startX = e.pageX - progressContainer.offsetLeft;
+          scrollLeft = progressContainer.scrollLeft;
+          progressContainer.style.cursor = 'grabbing';
+        });
+
+        progressContainer.addEventListener('mouseleave', () => {
+          isDragging = false;
+          progressContainer.style.cursor = 'grab';
+        });
+
+        progressContainer.addEventListener('mouseup', () => {
+          isDragging = false;
+          progressContainer.style.cursor = 'grab';
+        });
+
+        progressContainer.addEventListener('mousemove', (e) => {
+          if (!isDragging) return;
+          e.preventDefault();
+          const x = e.pageX - progressContainer.offsetLeft;
+          const walk = (x - startX) * 2;
+          progressContainer.scrollLeft = scrollLeft - walk;
+        });
+
+        // Soporte para touch devices
+        progressContainer.addEventListener('touchstart', (e) => {
+          startX = e.touches[0].pageX - progressContainer.offsetLeft;
+          scrollLeft = progressContainer.scrollLeft;
+        }, { passive: true });
+
+        progressContainer.addEventListener('touchmove', (e) => {
+          if (e.touches.length !== 1) return;
+          const x = e.touches[0].pageX - progressContainer.offsetLeft;
+          const walk = (x - startX) * 2;
+          progressContainer.scrollLeft = scrollLeft - walk;
+        }, { passive: true });
+      }
+    });
 
     // Mejorar feedback táctil
     document.querySelectorAll('button, input[type="submit"], label').forEach(el => {
