@@ -72,28 +72,34 @@ app.logger.addHandler(handler)
 if not os.path.exists("conversaciones"):
     os.makedirs("conversaciones")
 
-# ===================== FUNCIÓN PARA OLLAMA =====================
-def generar_respuesta_llm(prompt, modelo="mistral"):
+# ===================== FUNCIÓN PARA GROQ API =====================
+def generar_respuesta_llm(prompt, modelo="mixtral-8x7b-32768"):
     """
-    Envía un prompt al modelo de Ollama y devuelve la respuesta generada.
+    Envía un prompt al modelo de Groq y devuelve la respuesta generada.
+    Modelos disponibles: llama3-8b-8192, llama3-70b-8192, mixtral-8x7b-32768, gemma-7b-it
     """
     try:
-        url = "http://localhost:11434/api/generate"
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
+            "Content-Type": "application/json"
+        }
         payload = {
             "model": modelo,
-            "prompt": prompt,
-            "stream": False
+            "messages": [
+                {"role": "system", "content": "Eres un asistente empático que ayuda a las personas a reflexionar sobre sus emociones."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7
         }
-        response = requests.post(url, json=payload, timeout=10)
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
         response.raise_for_status()
         data = response.json()
-        return data.get("response", "").strip()
+        return data["choices"][0]["message"]["content"].strip()
     except requests.exceptions.RequestException as e:
-        app.logger.error(f"Error de conexión con Ollama: {e}")
-        return None
+        return f"Error de conexión con Groq: {e}"
     except Exception as e:
-        app.logger.error(f"Error al generar respuesta con Ollama: {e}")
-        return None
+        return f"Error al generar respuesta con Groq: {e}"
 
 # ===================== FUNCIONES DE UTILIDAD =====================
 def sanitizar_input(texto):
@@ -119,14 +125,6 @@ def calcular_duracion_dias(fecha_str):
     except ValueError:
         return 0
 
-def necesita_profesional(sintoma, duracion_dias, historial):
-    if duracion_dias > 30:
-        return True
-    if historial and any(palabra in historial[-1]['mensaje'].lower() 
-                         for palabra in ["suicidio", "autoflagelo", "no puedo más"]):
-        return True
-    return False
-
 # ===================== DATOS DE SÍNTOMAS =====================
 sintomas_disponibles = [
     "Ansiedad", "Tristeza", "Estrés", "Soledad", "Miedo", "Culpa", "Inseguridad",
@@ -138,10 +136,10 @@ sintomas_disponibles = [
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
 
-# Respuestas por síntoma 
+# ===================== RESPUESTAS POR SÍNTOMA =====================
 respuestas_por_sintoma = {
     "Ansiedad": [
-         "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
+        "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
         "Cuando sientes ansiedad, ¿qué técnicas has probado para calmarte?",
         "¿Notas que la ansiedad afecta tu cuerpo (ej. taquicardia, sudoración)?",
         "Vamos a respirar juntos: inhala por 4 segundos, exhala por 6. ¿Te ayuda?",
@@ -153,7 +151,7 @@ respuestas_por_sintoma = {
         "¿Qué pensamientos suelen venir justo antes de que inicie la ansiedad?"
     ],
     "Tristeza": [
-         "Sentir tristeza no significa debilidad. Es una señal de que algo importa.",
+        "Sentir tristeza no significa debilidad. Es una señal de que algo importa.",
         "¿Qué eventos recientes han influido en tu estado de ánimo?",
         "Permítete sentir. Reprimir emociones no las hace desaparecer.",
         "¿Te has dado permiso para descansar o simplemente estar contigo?",
@@ -164,8 +162,8 @@ respuestas_por_sintoma = {
         "¿Has probado escribir lo que sientes, sin filtros ni juicios?",
         "Estoy contigo en esto. ¿Qué necesitarías hoy para sentirte un poco mejor?"
     ],
-     "Estrés": [
-       "¿Notas si el estrés aparece más en ciertos momentos del día?",
+    "Estrés": [
+        "¿Notas si el estrés aparece más en ciertos momentos del día?",
         "A veces, solo detenerse y respirar ya es una forma de cuidarse.",
         "¿Te estás exigiendo demasiado últimamente?",
         "El estrés también habla de tus límites. ¿Puedes identificar alguno que fue cruzado?",
@@ -185,7 +183,7 @@ respuestas_por_sintoma = {
         "¿Te gustaría imaginar cómo sería un vínculo que te dé contención?",
         "A veces estar acompañado por alguien no significa dejar de sentir soledad. ¿Lo has sentido?",
         "¿Qué podrías hacer hoy que te haga sentir parte de algo, aunque sea pequeño?",
-        "¿Hay alguna comunidad o espacio que quisieras explorar?",
+        "¿Hay alguna comunidad or espacio que quisieras explorar?",
         "Recuerda que mereces sentirte valorado y escuchado."
     ],
     "Miedo": [
@@ -230,7 +228,7 @@ respuestas_por_sintoma = {
         "¿Cómo sueles manejar tu enojo cuando aparece?",
         "Hablar sobre lo que te molesta puede ayudarte a calmarte.",
         "¿Has probado técnicas para controlar la ira o relajarte?",
-        "Reconocer tu enojo es el primer paso para gestionarlo.",
+        "Reconcer tu enojo es el primer paso para gestionarlo.",
         "¿Cómo afecta el enojo tus relaciones personales?",
         "¿Tienes alguien con quien puedas hablar cuando estás enojado?",
         "Expresar el enojo de forma saludable es importante.",
@@ -256,7 +254,7 @@ respuestas_por_sintoma = {
         "¿Quieres contarme cómo has estado manejando este cansancio?",
         "Tomar pausas durante el día puede ayudarte a recuperar energías.",
         "Recuerda que cuidar de ti es una prioridad.",
-        "Si el agotamiento persiste, considera consultar con un profesional."
+        "If el agotamiento persiste, considera consultar con un profesional."
     ],
     "Falta de motivación": [
         "La falta de motivación puede ser difícil, pero es temporal.",
@@ -315,7 +313,7 @@ respuestas_por_sintoma = {
         "Hablar de tus preocupaciones puede aliviar su peso.",
         "¿Has probado técnicas para distraer tu mente o relajarte?",
         "Reconocer la preocupación es el primer paso para manejarla.",
-        "¿Sientes que la preocupación afecta tu sueño o ánimo?",
+        "¿Sientes que la preocupación afecta tu sueño or ánimo?",
         "¿Tienes alguien con quien puedas compartir lo que te preocupa?",
         "Aprender a diferenciar lo que puedes controlar ayuda a reducir el estrés.",
         "¿Quieres contarme qué te gustaría cambiar respecto a tus preocupaciones?",
@@ -346,7 +344,7 @@ respuestas_por_sintoma = {
         "Reconocerla es importante para buscar formas de superarla.",
         "¿Tienes alguien con quien puedas compartir tus sentimientos?",
         "Pequeños cambios en tu rutina pueden ayudar a mejorar.",
-        "¿Qué cosas te gustaría recuperar o volver a disfrutar?",
+        "¿Qué cosas te gustaría recuperar or volver a disfrutar?",
         "Es normal tener momentos bajos, sé paciente contigo mismo.",
         "¿Quieres contarme cómo te sientes en general últimamente?",
         "Buscar apoyo puede facilitar que recuperes energía e interés.",
@@ -392,7 +390,7 @@ respuestas_por_sintoma = {
     "Llanto frecuente": [
         "Llorar es una forma natural de liberar emociones contenidas.",
         "¿Sientes que lloras sin saber exactamente por qué?",
-        "No estás solo/a. Manyas personas pasan por esto más seguido de lo que imaginas.",
+        "No estás solo/a. Muchas personas pasan por esto más seguido de lo que imaginas.",
         "¿Qué suele pasar antes de que sientas ganas de llorar?",
         "Tu llanto también es una voz que pide ser escuchada.",
         "¿Hay algo que estés conteniendo desde hace tiempo?",
@@ -482,7 +480,7 @@ respuestas_por_sintoma = {
         "Recuerda que tu salud es prioridad y merece atención inmediata.",
         "¿Has evitado situaciones que aumentan la dificultad para respirar?",
         "Mantener la calma puede ayudarte a controlar la respiración.",
-        "If la dificultad es constante, acude a un especialista pronto.",
+        "Si la dificultad es constante, acude a un especialista pronto.",
         "Estoy aquí para escucharte y apoyarte.",
         "No estás solo/a, y hay ayuda para ti."
     ],
@@ -509,7 +507,7 @@ respuestas_por_sintoma = {
         "Hablar sobre ellos puede ayudarte a reducir su impacto.",
         "Reconocerlos es un paso para poder manejarlos mejor.",
         "¿Sientes que afectan tu día a día o tu bienestar?",
-        "¿Has probado técnicas para distraer tu mente o relajarte?",
+        "¿Has probado técnicas para distraer tu mente or relajarte?",
         "Buscar apoyo puede facilitar que encuentres estrategias útiles.",
         "¿Tienes alguien con quien puedas compartir estas experiencias?",
         "¿Quieres contarme cuándo suelen aparecer estos pensamientos?",
@@ -555,14 +553,14 @@ respuestas_por_sintoma = {
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
-        self.respuestas_usadas = []  
+        self.contador_interacciones = 0
         self.contexto_actual = None
 
     def to_dict(self):
         """Convierte el objeto a un diccionario para serialización"""
         return {
             'historial': self.historial,
-            'respuestas_usadas': self.respuestas_usadas,
+            'contador_interacciones': self.contador_interacciones,
             'contexto_actual': self.contexto_actual
         }
     
@@ -571,31 +569,39 @@ class SistemaConversacional:
         """Recrea el objeto desde un diccionario"""
         instance = cls()
         instance.historial = data.get('historial', [])
-        instance.respuestas_usadas = data.get('respuestas_usadas', [])
+        instance.contador_interacciones = data.get('contador_interacciones', 0)
         instance.contexto_actual = data.get('contexto_actual', None)
         return instance
 
-    def obtener_respuesta_unica(self, sintoma):
-        """Obtiene una respuesta no utilizada para el síntoma (fallback)"""
+    def obtener_respuesta_predefinida(self, sintoma):
+        """Obtiene una respuesta predefinida para el síntoma específico"""
+        if sintoma in respuestas_por_sintoma:
+            return random.choice(respuestas_por_sintoma[sintoma])
+        # Fallback genérico si el síntoma no está en el diccionario
         return "¿Puedes contarme más sobre cómo te sientes?"
 
-    def analizar_contexto(self, user_input):
-        """Detecta palabras clave para enriquecer el diálogo"""
-        if not isinstance(user_input, str):
-            return None
+    def obtener_respuesta_ia(self, sintoma, user_input):
+        """Intenta obtener respuesta de la IA"""
+        try:
+            prompt = f"""
+            Eres un asistente psicológico empático. El usuario está experimentando: {sintoma}.
+            Su último mensaje: "{user_input}"
 
-        user_input = user_input.lower()
-        if any(palabra in user_input for palabra in ["tranquilo", "tranquilidad", "calma"]):
-            return "Entiendo que buscas tranquilidad. ¿Qué suele ayudarte a encontrar calma?"
-        elif any(palabra in user_input for palabra in ["vida", "normalmente", "cotidiano"]):
-            return "Cuando dices que afecta tu vida normalmente, ¿en qué actividades concretas lo notas más?"
-        elif any(palabra in user_input for palabra in ["familia", "pareja", "amigos", "compañeros"]):
-            return "Las relaciones personales pueden ser complejas. ¿Cómo afecta esto a tus vínculos?"
-        elif any(palabra in user_input for palabra in ["trabajo", "estudio", "productividad"]):
-            return "¿Cómo está impactando esto en tu capacidad para concentrarte o cumplir con tus responsabilidades?"
-        elif any(palabra in user_input for palabra in ["sueño", "dormir", "insomnio"]):
-            return "El descanso es fundamental. ¿Cómo ha cambiado tu patrón de sueño recientemente?"
-        return None
+            Responde de manera comprensiva y breve (máximo 2 oraciones), ayudando a reflexionar
+            sobre emociones sin dar diagnóstico médico. Después de unas pocas interacciones,
+            deberás sugerir amablemente una cita con un psicólogo profesional.
+            """
+            
+            respuesta = generar_respuesta_llm(prompt, modelo="mixtral-8x7b-32768")
+            
+            # Verificar si la respuesta es válida (no un error)
+            if respuesta and not respuesta.startswith("Error"):
+                return respuesta
+        except Exception as e:
+            app.logger.error(f"Error al obtener respuesta de IA: {e}")
+        
+        # Fallback a respuesta predefinida si hay error
+        return self.obtener_respuesta_predefinida(sintoma)
 
     def obtener_respuesta(self, sintoma, user_input):
         # 1. Filtro de seguridad (suicidio, autolesión, etc.)
@@ -604,29 +610,15 @@ class SistemaConversacional:
         if any(palabra in user_input.lower() for palabra in palabras_crisis):
             return "⚠️ Este tema es muy importante. Por favor, comunícate de inmediato con tu psicólogo o llama al número de emergencias 911."
 
-        # 2. Primero intentar análisis contextual
-        respuesta_contextual = self.analizar_contexto(user_input)
-        if respuesta_contextual:
-            return respuesta_contextual
+        # 2. Si hemos alcanzado el límite de interacciones, sugerir cita
+        if self.contador_interacciones >= 10:
+            return "Ha sido un gusto conversar contigo. Creo que sería muy beneficioso que continúes esta conversación con un psicólogo profesional. ¿Te gustaría agendar una cita presencial?"
+
+        # 3. Intentar con IA o usar respuesta predefinida
+        respuesta = self.obtener_respuesta_ia(sintoma, user_input)
+        self.contador_interacciones += 1
         
-        # 3. Intentar con Ollama (IA)
-        try:
-            prompt = f"""
-            Eres un asistente empático que ayuda a las personas a reflexionar sobre sus emociones.
-            El usuario menciona que siente: {sintoma}.
-            Ha dicho: "{user_input}".
-            Responde de manera comprensiva, breve y empática, sin reemplazar al psicólogo.
-            """
-            respuesta_ia = generar_respuesta_llm(prompt, modelo="mistral")
-            
-            # Verificar que la respuesta de IA sea válida
-            if respuesta_ia and len(respuesta_ia) > 10 and "Error" not in respuesta_ia:
-                return respuesta_ia
-        except Exception as e:
-            app.logger.error(f"Error al obtener respuesta de Ollama: {e}")
-        
-        # 4. Fallback a respuestas predefinidas
-        return self.obtener_respuesta_unica(sintoma)
+        return respuesta
 
     def agregar_interaccion(self, tipo, mensaje, sintoma=None):
         self.historial.append({
@@ -673,9 +665,6 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
             body=event
         ).execute()
         
-        # Programar recordatorio
-        programar_recordatorio(fecha, hora, telefono)
-        
         return event.get('htmlLink')
     except HttpError as error:
         app.logger.error(f"Error al crear evento: {error}")
@@ -683,13 +672,6 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
     except Exception as e:
         app.logger.error(f"Error inesperado al crear evento: {e}")
         return None
-
-def programar_recordatorio(fecha, hora, telefono):
-    """Programa un recordatorio para la cita (implementación básica)"""
-    try:
-        app.logger.info(f"Recordatorio programado para {fecha} {hora}, tel: {telefono}")
-    except Exception as e:
-        app.logger.error(f"Error al programar recordatorio: {e}")
 
 # ===================== FUNCIÓN DE CORREO =====================
 def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
@@ -730,7 +712,7 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
 @app.route("/", methods=["GET", "POST"])
 @limiter.limit("30 per minute")
 def index():
-    # ✅ Asegurar que fechas_validas siempre exista en la sesión (PRIMERO)
+    # ✅ Asegurar que fechas_validas siempre exista en la sesión
     if "fechas_validas" not in session:
         session["fechas_validas"] = {
             'hoy': datetime.now().strftime('%Y-%m-%d'),
@@ -740,13 +722,12 @@ def index():
             'max_sintoma': datetime.now().strftime('%Y-%m-%d')
         }
 
-    # ✅ Inicializar o recuperar la conversación (DESPUÉS)
+    # ✅ Inicializar o recuperar la conversación
     if "conversacion_data" not in session:
         conversacion = SistemaConversacional()
         session.update({
             "estado": "inicio",
             "sintoma_actual": None,
-            "duracion_sintoma": None,
             "conversacion_data": conversacion.to_dict()
         })
     else:
@@ -768,13 +749,12 @@ def index():
 
         elif estado_actual == "evaluacion":
             if fecha := request.form.get("fecha_inicio_sintoma"):
-                session["duracion_sintoma"] = calcular_duracion_dias(fecha)
+                duracion = calcular_duracion_dias(fecha)
                 session["estado"] = "profundizacion"
                 
-                diferencia = session["duracion_sintoma"]
-                if diferencia < 30:
+                if duracion < 30:
                     comentario = "Es bueno que lo identifiques temprano."
-                elif diferencia < 365:
+                elif duracion < 365:
                     comentario = "Varios meses con esto... debe ser difícil."
                 else:
                     comentario = "Tu perseverancia es admirable."
@@ -786,19 +766,10 @@ def index():
             if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                if any(palabra in user_input.lower() for palabra in ["cambiar", "otro tema"]):
-                    session["estado"] = "inicio"
-                    conversacion.agregar_interaccion('bot', "Claro, hablemos de otro tema. ¿Qué otro síntoma te gustaría discutir?", None)
-                
-                elif any(palabra in user_input.lower() for palabra in ["adiós", "gracias", "hasta luego"]):
-                    session["estado"] = "fin"
-                    conversacion.agregar_interaccion('bot', "Fue un gusto ayudarte. Recuerda que estoy aquí cuando me necesites. 💙", None)
-                
-                elif any(palabra in user_input.lower() for palabra in ["cita", "agendar", "doctor"]) or \
-                     necesita_profesional(session["sintoma_actual"], session["duracion_sintoma"], conversacion.historial):
+                # Verificar si debemos sugerir cita (límite de interacciones alcanzado)
+                if conversacion.contador_interacciones >= 10:
                     session["estado"] = "derivacion"
-                    conversacion.agregar_interaccion('bot', "Creo que sería bueno que hables con un profesional. ¿Quieres que te ayude a agendar una cita presencial?", session["sintoma_actual"])
-                
+                    conversacion.agregar_interaccion('bot', "Ha sido un gusto conversar contigo. Creo que sería muy beneficioso que continúes esta conversación con un psicólogo profesional. ¿Te gustaría agendar una cita presencial?", session["sintoma_actual"])
                 else:
                     respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
                     conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
@@ -806,16 +777,18 @@ def index():
         elif estado_actual == "derivacion":
             if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
-                if any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita"]):
+                if any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale"]):
                     session["estado"] = "agendar_cita"
                     mensaje = (
-                        "Gracias por confiar en nosotros. Por favor completa los datos para tu cita presencial:\n\n"
-                        "📅 Fecha disponible: " + session["fechas_validas"]['hoy'] + "\n"
-                        "⏰ Horario de atención: 9:00 AM a 6:00 PM"
+                        "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
+                        "📅 Selecciona una fecha disponible\n"
+                        "⏰ Elige un horario que te convenga\n"
+                        "📱 Ingresa tu número de teléfono para contactarte"
                     )
                     conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
                 else:
-                    conversacion.agregar_interaccion('bot', "Entiendo. ¿Quieres seguir hablando de esto o prefieres cambiar de tema?", session["sintoma_actual"])
+                    session["estado"] = "fin"
+                    conversacion.agregar_interaccion('bot', "Entiendo. Recuerda que estoy aquí cuando necesites apoyo. Cuídate mucho. 💙", None)
 
         elif estado_actual == "agendar_cita":
             if fecha := request.form.get("fecha_cita"):
@@ -888,7 +861,6 @@ def reset():
         session["conversacion_data"] = conversacion.to_dict()
         session["estado"] = "inicio"
         session["sintoma_actual"] = None
-        session["duracion_sintoma"] = None
         session["fechas_validas"] = {
             'hoy': datetime.now().strftime('%Y-%m-%d'),
             'min_cita': datetime.now().strftime('%Y-%m-%d'),
