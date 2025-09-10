@@ -10,3 +10,6 @@ flask-wtf>=1.1.1
 environs>=11.0.0
 gunicorn>=21.2.0
 groq>=0.3.0
+requests>=2.31.0
+blinker>=1.7.0
+markupsafe>=2.1.3
