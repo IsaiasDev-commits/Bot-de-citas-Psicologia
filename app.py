@@ -23,6 +23,7 @@ from flask_wtf.csrf import CSRFProtect
 from markupsafe import escape
 import threading
 import time
+from groq import Groq
 
 # ===================== CONFIGURACIÓN INICIAL =====================
 load_dotenv()
@@ -137,7 +138,7 @@ class SistemaAprendizaje:
         if sintoma in self.respuestas_efectivas and self.respuestas_efectivas[sintoma]:
             # Ordenar respuestas por efectividad
             respuestas_ordenadas = sorted(
-                self.respuestas_efectivas[sintoma].items(),
+                self.respuestas_eflectivas[sintoma].items(),
                 key=lambda x: x[1]['efectividad_total'] / x[1]['veces_usada'] if x[1]['veces_usada'] > 0 else 0,
                 reverse=True
             )
@@ -153,72 +154,52 @@ class SistemaAprendizaje:
 # ===================== FUNCIÓN PARA GROQ API MEJORADA =====================
 def generar_respuesta_llm(prompt, modelo="llama3-70b-8192"):
     """
-    Envía un prompt al modelo de Groq y devuelve la respuesta generada.
+    Envía un prompt al modelo de Groq usando el SDK oficial
     Modelos disponibles: llama3-8b-8192, llama3-70b-8192, mixtral-8x7b-32768, gemma-7b-it
     """
     try:
-        # URL CORREGIDA - Esta es la URL correcta de la API de Groq
-        url = "https://api.groq.com/openai/v1/chat/completions"
+        # Usar el SDK oficial de Groq
+        client = Groq(api_key=os.getenv('GROQ_API_KEY'))
         
-        headers = {
-            "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
-            "Content-Type": "application/json"
-        }
-        
-        # PROMPT MEJORADO con instrucciones más específicas
-        system_prompt = """
-        Eres Equilibra, un asistente psicológico empático y profesional. 
-        Tu objetivo es ayudar a las personas a reflexionar sobre sus emociones y, 
-        cuando sea apropiado, sugerir una cita con un psicólogo profesional. 
-        
-        DIRECTRICES ESPECÍFICAS:
-        1. Responde de manera comprensiva, breve (máximo 2-3 oraciones) y natural
-        2. Sé empático pero profesional
-        3. Haz preguntas abiertas para profundizar en el tema
-        4. Valida las emociones del usuario
-        5. Ofrece perspectivas útiles pero no des diagnósticos
-        6. Después de 2-3 interacciones, sugiere amablemente una cita presencial
-        7. Si el usuario menciona crisis grave, derívalo inmediatamente a ayuda profesional
-        
-        EJEMPLOS DE RESPUESTAS ADECUADAS:
-        - "Entiendo que estés pasando por un momento difícil. ¿Qué has intentado para manejar esta situación?"
-        - "Es completamente normal sentirse así en estas circunstancias. ¿Te gustaría hablar más sobre qué desencadenó estos sentimientos?"
-        - "Agradezco que compartas esto conmigo. ¿Cómo ha afectado esto tu día a día?"
-        - "Parece que esto te está afectando profundamente. ¿Has considerado hablar con un profesional que pueda ayudarte de manera más personalizada?"
-        """
-        
-        payload = {
-            "model": modelo,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
+        completion = client.chat.completions.create(
+            model=modelo,
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Eres Equilibra, un asistente psicológico empático y profesional. 
+                    Tu objetivo es ayudar a las personas a reflexionar sobre sus emociones y, 
+                    cuando sea apropiado, sugerir una cita con un psicólogo profesional.
+                    
+                    DIRECTRICES:
+                    1. Responde de manera comprensiva, breve (2-3 oraciones) y natural
+                    2. Sé empático pero profesional
+                    3. Haz preguntas abiertas para profundizar
+                    4. Valida las emociones del usuario
+                    5. Ofrece perspectivas útiles pero no des diagnósticos
+                    6. Después de 2-3 interacciones, sugiere amablemente una cita presencial
+                    7. Si el usuario menciona crisis grave, derívalo inmediatamente a ayuda profesional
+                    
+                    EJEMPLOS DE RESPUESTAS ADECUADAS:
+                    - "Entiendo que estés pasando por un momento difícil. ¿Qué has intentado para manejar esta situación?"
+                    - "Es completamente normal sentirse así en estas circunstancias. ¿Te gustaría hablar más sobre qué desencadenó estos sentimientos?"
+                    - "Agradezco que compartas esto conmigo. ¿Cómo ha afectado esto tu día a día?"
+                    - "Parece que esto te está afectando profundamente. ¿Has considerado hablar con un profesional que pueda ayudarte de manera más personalizada?"""
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
             ],
-            "temperature": 0.7,  # Reducido para más coherencia
-            "max_tokens": 150,
-            "top_p": 0.9,
-            "frequency_penalty": 0.5,  # Reduce repeticiones
-            "presence_penalty": 0.5    # Fomenta nuevos temas
-        }
+            temperature=0.7,
+            max_tokens=150,
+            top_p=0.9,
+            stream=False
+        )
         
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        
-        # Verificar que la respuesta tenga contenido
-        if "choices" in data and len(data["choices"]) > 0:
-            return data["choices"][0]["message"]["content"].strip()
-        else:
-            app.logger.error("Respuesta de Groq sin contenido válido")
-            return None
+        return completion.choices[0].message.content.strip()
     
-    except requests.exceptions.RequestException as e:
-        app.logger.error(f"Error de conexión con Groq: {e}")
-        return None
-    except KeyError as e:
-        app.logger.error(f"Error en la estructura de la respuesta de Groq: {e}")
-        return None
     except Exception as e:
-        app.logger.error(f"Error al generar respuesta con Groq: {e}")
+        app.logger.error(f"Error al generar respuesta con Groq SDK: {e}")
         return None
 
 # ===================== FUNCIONES DE UTILIDAD =====================
@@ -425,7 +406,7 @@ respuestas_por_sintoma = {
         "La conexión cuerpo-mente es importante para el bienestar general.",
         "¿Has probado terapias complementarias, como masajes o yoga?",
         "Escuchar a tu cuerpo es clave para cuidarte mejor.",
-        "Si el dolor es constante, no dudes en buscar apoyo especializado."
+        "If el dolor es constante, no dudes en buscar apoyo especializado."
     ],
     "Preocupación excesiva": [
         "Preocuparse es normal, pero en exceso puede afectar tu vida.",
@@ -559,7 +540,7 @@ respuestas_por_sintoma = {
         "Probar estiramientos suaves puede ayudarte to aliviar la tensión.",
         "¿Has intentado técnicas de relajación o respiración profunda?",
         "Hablar de tu estado puede ayudarte a identificar causas.",
-        "¿Sientes que la tensión afecta tu movilidad o bienestar?",
+        "¿Sientes que la tensión afecta tu movilidad or bienestar?",
         "El descanso y una buena postura son importantes para el cuerpo.",
         "¿Tienes alguien con quien puedas compartir cómo te sientes?",
         "Buscar ayuda puede facilitar aliviar la tensión muscular.",
@@ -692,7 +673,7 @@ class SistemaConversacional:
         """Recrea el objeto desde un diccionario"""
         instance = cls()
         instance.historial = data.get('historial', [])
-        instance.contador_interacciones = data.get('contador_interacciones', 0)
+        instance.contador_interaccions = data.get('contador_interacciones', 0)
         instance.contexto_actual = data.get('contexto_actual', None)
         instance.engagement_actual = data.get('engagement_actual', 5)
         return instance
