@@ -30,11 +30,6 @@ load_dotenv()
 env = Env()
 env.read_env()
 
-# Log inicial para debug
-print("Python version:", sys.version)
-print("Current directory:", os.getcwd())
-print("Files in directory:", os.listdir('.'))
-
 app = Flask(__name__)
 app.secret_key = env.str("FLASK_SECRET_KEY")
 
@@ -71,6 +66,12 @@ if not os.path.exists('logs'):
 handler = RotatingFileHandler('logs/app.log', maxBytes=10000, backupCount=3)
 handler.setLevel(logging.INFO)
 app.logger.addHandler(handler)
+
+# Log inicial para debug (solo en desarrollo)
+if os.environ.get('FLASK_ENV') != 'production':
+    app.logger.debug(f"Python version: {sys.version}")
+    app.logger.debug(f"Current directory: {os.getcwd()}")
+    app.logger.debug(f"Files in directory: {os.listdir('.')}")
 
 if not os.path.exists("conversaciones"):
     os.makedirs("conversaciones")
@@ -138,7 +139,7 @@ class SistemaAprendizaje:
         if sintoma in self.respuestas_efectivas and self.respuestas_efectivas[sintoma]:
             # Ordenar respuestas por efectividad
             respuestas_ordenadas = sorted(
-                self.respuestas_eflectivas[sintoma].items(),
+                self.respuestas_efectivas[sintoma].items(),
                 key=lambda x: x[1]['efectividad_total'] / x[1]['veces_usada'] if x[1]['veces_usada'] > 0 else 0,
                 reverse=True
             )
@@ -280,7 +281,7 @@ respuestas_por_sintoma = {
         "¿Qué tipo de compañía sientes que necesitas: emocional, física, espiritual?",
         "¿Hay alguna actividad que te conecte contigo y te haga sentir menos solo?",
         "¿Has considerado escribirle a alguien con quien no hablas hace tiempo?",
-        "Conectar con otros lleva tiempo, y está bien tomarse ese proceso con calma.",
+        "Conectar con otros lleva tiempo, and está bien tomarse ese proceso con calma.",
         "¿Te gustaría imaginar cómo sería un vínculo que te dé contención?",
         "A veces estar acompañado por alguien no significa dejar de sentir soledad. ¿Lo has sentido?",
         "¿Qué podrías hacer hoy que te haga sentir parte de algo, aunque sea pequeño?",
@@ -290,7 +291,7 @@ respuestas_por_sintoma = {
     "Miedo": [
         "El miedo es una emoción natural que nos protege, pero no debe paralizarnos.",
         "¿Puedes identificar qué te provoca miedo exactamente?",
-        "Hablar de tus miedos puede ayudarte a entenderlos mejor.",
+        "Hablar de tus miedos puede ayudarte to entenderlos mejor.",
         "¿Cómo reaccionas cuando el miedo aparece?",
         "Enfrentar poco a poco esos miedos puede disminuir su poder.",
         "¿Has probado técnicas de relajación cuando sientes miedo?",
@@ -302,13 +303,13 @@ respuestas_por_sintoma = {
     "Culpa": [
         "Sentir culpa puede ser agotador. ¿Qué parte de ti necesita ser perdonada?",
         "¿Eres igual de duro contigo que lo serías con alguien que amas?",
-        "¿La culpa viene de una expectativa tuya o de los demás?",
+        "¿La culpa viene de una expectativa tuya or de los demás?",
         "Podemos aprender de lo que pasó sin cargarlo como un castigo eterno.",
         "Todos cometemos errores. La clave está en lo que haces con eso ahora.",
         "¿Hay algo que puedas hacer para reparar o aliviar esa carga?",
         "A veces la culpa no es real, sino impuesta. ¿De quién es esa voz interna?",
         "Eres humano. Equivocarte no te hace menos valioso.",
-        "¿Qué le dirías a un amigo si estuviera en tu lugar?",
+        "¿Qué le dirías a un amigo if estuviera en tu lugar?",
         "Reconocer lo que sientes es el primer paso hacia la liberación emocional."
     ],
     "Inseguridad": [
@@ -395,7 +396,7 @@ respuestas_por_sintoma = {
         "El dolor puede afectar mucho tu calidad de vida, es importante escucharlo.",
         "¿Dónde sientes más el dolor y cómo describirías su intensidad?",
         "Hablar sobre el dolor puede ayudarte a entenderlo mejor.",
-        "¿Has probado técnicas de relajación o estiramientos suaves?",
+        "¿Has probado técnicas de relajación or estiramientos suaves?",
         "El estrés puede influir en la percepción del dolor.",
         "¿Has consultado a un profesional sobre este dolor?",
         "Cuidar tu postura puede ayudar a disminuir molestias físicas.",
@@ -406,14 +407,14 @@ respuestas_por_sintoma = {
         "La conexión cuerpo-mente es importante para el bienestar general.",
         "¿Has probado terapias complementarias, como masajes o yoga?",
         "Escuchar a tu cuerpo es clave para cuidarte mejor.",
-        "If el dolor es constante, no dudes en buscar apoyo especializado."
+        "Si el dolor es constante, no dudes en buscar apoyo especializado."
     ],
     "Preocupación excesiva": [
         "Preocuparse es normal, pero en exceso puede afectar tu vida.",
         "¿Qué pensamientos recurrentes te generan más preocupación?",
         "Hablar de tus preocupaciones puede aliviar su peso.",
         "¿Has probado técnicas para distraer tu mente o relajarte?",
-        "Reconocer la preocupación es el primer paso para manejarla.",
+        "Reconcer la preocupación es el primer paso para manejarla.",
         "¿Sientes que la preocupación afecta tu sueño o ánimo?",
         "¿Tienes alguien con quien puedas compartir lo que te preocupa?",
         "Aprender a diferenciar lo que puedes controlar ayuda a reducir el estrés.",
@@ -452,7 +453,7 @@ respuestas_por_sintoma = {
         "¿Has probado actividades nuevas o diferentes para motivarte?",
         "Recuerda que mereces cuidado y atención a tus emociones.",
         "Si la apatía persiste, considera hablar con un profesional.",
-        "Tu bienestar es importante y hay caminos para mejorar."
+        "Tu bienestar es importante and hay caminos para mejorar."
     ],
     "Sensación de vacío": [
         "Sentir vacío puede ser muy desconcertante, gracias por compartir.",
@@ -518,7 +519,7 @@ respuestas_por_sintoma = {
         "Estoy aquí para escucharte y apoyarte en este proceso."
     ],
     "Desesperanza": [
-        "Sentir desesperanza es muy difícil, gracias por compartirlo.",
+        "Sentir desesperanza es muy difícil, gracias por compartir.",
         "¿Quieres contarme qué te hace sentir así últimamente?",
         "Hablar sobre ello puede ayudarte a encontrar luz en la oscuridad.",
         "Reconocer esos sentimientos es el primer paso para salir adelante.",
@@ -530,7 +531,7 @@ respuestas_por_sintoma = {
         "Buscar ayuda profesional puede ser muy beneficioso ahora.",
         "¿Has intentado actividades que te ayuden a sentir esperanza?",
         "No estás solo/a, y hay caminos para sentirte mejor.",
-        "¿Quieres que te comparta recursos o estrategias para esto?",
+        "¿Quieres que te comparta recursos or estrategias para esto?",
         "Estoy aquí para escucharte y acompañarte siempre.",
         "La esperanza puede volver, paso a paso y con apoyo."
     ],
@@ -673,7 +674,7 @@ class SistemaConversacional:
         """Recrea el objeto desde un diccionario"""
         instance = cls()
         instance.historial = data.get('historial', [])
-        instance.contador_interaccions = data.get('contador_interacciones', 0)
+        instance.contador_interacciones = data.get('contador_interacciones', 0)
         instance.contexto_actual = data.get('contexto_actual', None)
         instance.engagement_actual = data.get('engagement_actual', 5)
         return instance
@@ -1167,7 +1168,7 @@ if __name__ == "__main__":
         missing_vars = [var for var in required_env_vars if not os.getenv(var)]
         
         if missing_vars:
-            print(f"ERROR: Variables de entorno faltantes en producción: {missing_vars}")
+            app.logger.error(f"ERROR: Variables de entorno faltantes en producción: {missing_vars}")
             exit(1)
     
     # Inicializar directorios necesarios
