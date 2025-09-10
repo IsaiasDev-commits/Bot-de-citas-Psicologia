@@ -79,7 +79,7 @@ def generar_respuesta_llm(prompt, modelo="llama3-70b-8192"):
     Modelos disponibles: llama3-8b-8192, llama3-70b-8192, mixtral-8x7b-32768, gemma-7b-it
     """
     try:
-        url = "https://api.groq.com/openai/v1/chat/completions"
+        url = "https://console.groq.com/home"
         headers = {
             "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
             "Content-Type": "application/json"
