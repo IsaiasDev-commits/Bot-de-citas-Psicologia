@@ -21,6 +21,8 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 from markupsafe import escape
+import threading
+import time
 
 # ===================== CONFIGURACIÓN INICIAL =====================
 load_dotenv()
@@ -72,33 +74,148 @@ app.logger.addHandler(handler)
 if not os.path.exists("conversaciones"):
     os.makedirs("conversaciones")
 
-# ===================== FUNCIÓN PARA GROQ API =====================
+if not os.path.exists("datos"):
+    os.makedirs("datos")
+
+# ===================== SISTEMA DE APRENDIZAJE =====================
+class SistemaAprendizaje:
+    def __init__(self):
+        self.respuestas_efectivas = {}  # Almacena respuestas que han funcionado bien
+        self.patrones_conversacion = {}  # Aprende patrones de conversación
+        self.archivo_aprendizaje = "datos/aprendizaje.json"
+        self.cargar_aprendizaje()
+    
+    def cargar_aprendizaje(self):
+        """Carga los datos de aprendizaje desde archivo"""
+        try:
+            if os.path.exists(self.archivo_aprendizaje):
+                with open(self.archivo_aprendizaje, 'r', encoding='utf-8') as f:
+                    datos = json.load(f)
+                    self.respuestas_efectivas = datos.get('respuestas_efectivas', {})
+                    self.patrones_conversacion = datos.get('patrones_conversacion', {})
+        except Exception as e:
+            app.logger.error(f"Error cargando aprendizaje: {e}")
+    
+    def guardar_aprendizaje(self):
+        """Guarda los datos de aprendizaje en archivo"""
+        try:
+            os.makedirs(os.path.dirname(self.archivo_aprendizaje), exist_ok=True)
+            with open(self.archivo_aprendizaje, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'respuestas_efectivas': self.respuestas_efectivas,
+                    'patrones_conversacion': self.patrones_conversacion
+                }, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            app.logger.error(f"Error guardando aprendizaje: {e}")
+    
+    def evaluar_respuesta(self, sintoma, respuesta_usuario, respuesta_bot, engagement):
+        """Evalúa qué tan efectiva fue la respuesta del bot"""
+        # Calcular efectividad basada en engagement (longitud de respuesta, tiempo de interacción, etc.)
+        efectividad = min(10, max(1, engagement))
+        
+        if sintoma not in self.respuestas_efectivas:
+            self.respuestas_efectivas[sintoma] = {}
+        
+        # Almacenar respuesta efectiva
+        if respuesta_bot not in self.respuestas_efectivas[sintoma]:
+            self.respuestas_efectivas[sintoma][respuesta_bot] = {
+                'efectividad_total': 0,
+                'veces_usada': 0,
+                'ultimo_uso': datetime.now().isoformat()
+            }
+        
+        # Actualizar estadísticas
+        self.respuestas_efectivas[sintoma][respuesta_bot]['efectividad_total'] += efectividad
+        self.respuestas_efectivas[sintoma][respuesta_bot]['veces_usada'] += 1
+        self.respuestas_efectivas[sintoma][respuesta_bot]['ultimo_uso'] = datetime.now().isoformat()
+        
+        # Guardar aprendizaje
+        self.guardar_aprendizaje()
+    
+    def obtener_mejor_respuesta(self, sintoma, contexto):
+        """Obtiene la respuesta más efectiva para un síntoma y contexto dado"""
+        if sintoma in self.respuestas_efectivas and self.respuestas_efectivas[sintoma]:
+            # Ordenar respuestas por efectividad
+            respuestas_ordenadas = sorted(
+                self.respuestas_efectivas[sintoma].items(),
+                key=lambda x: x[1]['efectividad_total'] / x[1]['veces_usada'] if x[1]['veces_usada'] > 0 else 0,
+                reverse=True
+            )
+            
+            # Devolver la mejor respuesta (evitando repetir la misma muy seguido)
+            for respuesta, stats in respuestas_ordenadas[:3]:  # Top 3
+                ultimo_uso = datetime.fromisoformat(stats['ultimo_uso'])
+                if (datetime.now() - ultimo_uso).total_seconds() > 3600:  # No repetir en 1 hora
+                    return respuesta
+        
+        return None  # Dejar que la IA genere una nueva respuesta
+
+# ===================== FUNCIÓN PARA GROQ API MEJORADA =====================
 def generar_respuesta_llm(prompt, modelo="llama3-70b-8192"):
     """
     Envía un prompt al modelo de Groq y devuelve la respuesta generada.
     Modelos disponibles: llama3-8b-8192, llama3-70b-8192, mixtral-8x7b-32768, gemma-7b-it
     """
     try:
-        url = "https://console.groq.com/home"
+        # URL CORREGIDA - Esta es la URL correcta de la API de Groq
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        
         headers = {
             "Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}",
             "Content-Type": "application/json"
         }
+        
+        # PROMPT MEJORADO con instrucciones más específicas
+        system_prompt = """
+        Eres Equilibra, un asistente psicológico empático y profesional. 
+        Tu objetivo es ayudar a las personas a reflexionar sobre sus emociones y, 
+        cuando sea apropiado, sugerir una cita con un psicólogo profesional. 
+        
+        DIRECTRICES ESPECÍFICAS:
+        1. Responde de manera comprensiva, breve (máximo 2-3 oraciones) y natural
+        2. Sé empático pero profesional
+        3. Haz preguntas abiertas para profundizar en el tema
+        4. Valida las emociones del usuario
+        5. Ofrece perspectivas útiles pero no des diagnósticos
+        6. Después de 2-3 interacciones, sugiere amablemente una cita presencial
+        7. Si el usuario menciona crisis grave, derívalo inmediatamente a ayuda profesional
+        
+        EJEMPLOS DE RESPUESTAS ADECUADAS:
+        - "Entiendo que estés pasando por un momento difícil. ¿Qué has intentado para manejar esta situación?"
+        - "Es completamente normal sentirse así en estas circunstancias. ¿Te gustaría hablar más sobre qué desencadenó estos sentimientos?"
+        - "Agradezco que compartas esto conmigo. ¿Cómo ha afectado esto tu día a día?"
+        - "Parece que esto te está afectando profundamente. ¿Has considerado hablar con un profesional que pueda ayudarte de manera más personalizada?"
+        """
+        
         payload = {
             "model": modelo,
             "messages": [
-                {"role": "system", "content": "Eres un asistente psicológico empático y profesional. Tu objetivo es ayudar a las personas a reflexionar sobre sus emociones y, cuando sea apropiado, sugerir una cita con un psicólogo profesional. Responde de manera comprensiva, breve (máximo 2-3 oraciones) y natural. Después de algunas interacciones o cuando el usuario lo solicite, sugiere amablemente una cita presencial."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.7,
-            "max_tokens": 150
+            "temperature": 0.7,  # Reducido para más coherencia
+            "max_tokens": 150,
+            "top_p": 0.9,
+            "frequency_penalty": 0.5,  # Reduce repeticiones
+            "presence_penalty": 0.5    # Fomenta nuevos temas
         }
-        response = requests.post(url, headers=headers, json=payload, timeout=20)
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
+        
+        # Verificar que la respuesta tenga contenido
+        if "choices" in data and len(data["choices"]) > 0:
+            return data["choices"][0]["message"]["content"].strip()
+        else:
+            app.logger.error("Respuesta de Groq sin contenido válido")
+            return None
+    
     except requests.exceptions.RequestException as e:
         app.logger.error(f"Error de conexión con Groq: {e}")
+        return None
+    except KeyError as e:
+        app.logger.error(f"Error en la estructura de la respuesta de Groq: {e}")
         return None
     except Exception as e:
         app.logger.error(f"Error al generar respuesta con Groq: {e}")
@@ -186,7 +303,7 @@ respuestas_por_sintoma = {
         "¿Te gustaría imaginar cómo sería un vínculo que te dé contención?",
         "A veces estar acompañado por alguien no significa dejar de sentir soledad. ¿Lo has sentido?",
         "¿Qué podrías hacer hoy que te haga sentir parte de algo, aunque sea pequeño?",
-        "¿Hay alguna comunidad or espacio que quisieras explorar?",
+        "¿Hay alguna comunidad o espacio que quisieras explorar?",
         "Recuerda que mereces sentirte valorado y escuchado."
     ],
     "Miedo": [
@@ -231,7 +348,7 @@ respuestas_por_sintoma = {
         "¿Cómo sueles manejar tu enojo cuando aparece?",
         "Hablar sobre lo que te molesta puede ayudarte a calmarte.",
         "¿Has probado técnicas para controlar la ira o relajarte?",
-        "Reconcer tu enojo es el primer paso para gestionarlo.",
+        "Reconocer tu enojo es el primer paso para gestionarlo.",
         "¿Cómo afecta el enojo tus relaciones personales?",
         "¿Tienes alguien con quien puedas hablar cuando estás enojado?",
         "Expresar el enojo de forma saludable es importante.",
@@ -257,7 +374,7 @@ respuestas_por_sintoma = {
         "¿Quieres contarme cómo has estado manejando este cansancio?",
         "Tomar pausas durante el día puede ayudarte a recuperar energías.",
         "Recuerda que cuidar de ti es una prioridad.",
-        "If el agotamiento persiste, considera consultar con un profesional."
+        "Si el agotamiento persiste, considera consultar con un profesional."
     ],
     "Falta de motivación": [
         "La falta de motivación puede ser difícil, pero es temporal.",
@@ -316,7 +433,7 @@ respuestas_por_sintoma = {
         "Hablar de tus preocupaciones puede aliviar su peso.",
         "¿Has probado técnicas para distraer tu mente o relajarte?",
         "Reconocer la preocupación es el primer paso para manejarla.",
-        "¿Sientes que la preocupación afecta tu sueño or ánimo?",
+        "¿Sientes que la preocupación afecta tu sueño o ánimo?",
         "¿Tienes alguien con quien puedas compartir lo que te preocupa?",
         "Aprender a diferenciar lo que puedes controlar ayuda a reducir el estrés.",
         "¿Quieres contarme qué te gustaría cambiar respecto a tus preocupaciones?",
@@ -347,7 +464,7 @@ respuestas_por_sintoma = {
         "Reconocerla es importante para buscar formas de superarla.",
         "¿Tienes alguien con quien puedas compartir tus sentimientos?",
         "Pequeños cambios en tu rutina pueden ayudar a mejorar.",
-        "¿Qué cosas te gustaría recuperar or volver a disfrutar?",
+        "¿Qué cosas te gustaría recuperar o volver a disfrutar?",
         "Es normal tener momentos bajos, sé paciente contigo mismo.",
         "¿Quieres contarme cómo te sientes en general últimamente?",
         "Buscar apoyo puede facilitar que recuperes energía e interés.",
@@ -439,7 +556,7 @@ respuestas_por_sintoma = {
     "Tensión muscular": [
         "La tensión muscular puede ser síntoma de estrés o ansiedad.",
         "¿En qué partes de tu cuerpo sientes más tensión?",
-        "Probar estiramientos suaves puede ayudarte a aliviar la tensión.",
+        "Probar estiramientos suaves puede ayudarte to aliviar la tensión.",
         "¿Has intentado técnicas de relajación o respiración profunda?",
         "Hablar de tu estado puede ayudarte a identificar causas.",
         "¿Sientes que la tensión afecta tu movilidad o bienestar?",
@@ -483,7 +600,7 @@ respuestas_por_sintoma = {
         "Recuerda que tu salud es prioridad y merece atención inmediata.",
         "¿Has evitado situaciones que aumentan la dificultad para respirar?",
         "Mantener la calma puede ayudarte a controlar la respiración.",
-        "Si la dificultad es constante, acude a un especialista pronto.",
+        "If la dificultad es constante, acude a un especialista pronto.",
         "Estoy aquí para escucharte y apoyarte.",
         "No estás solo/a, y hay ayuda para ti."
     ],
@@ -510,7 +627,7 @@ respuestas_por_sintoma = {
         "Hablar sobre ellos puede ayudarte a reducir su impacto.",
         "Reconocerlos es un paso para poder manejarlos mejor.",
         "¿Sientes que afectan tu día a día o tu bienestar?",
-        "¿Has probado técnicas para distraer tu mente or relajarte?",
+        "¿Has probado técnicas para distraer tu mente o relajarte?",
         "Buscar apoyo puede facilitar que encuentres estrategias útiles.",
         "¿Tienes alguien con quien puedas compartir estas experiencias?",
         "¿Quieres contarme cuándo suelen aparecer estos pensamientos?",
@@ -551,19 +668,23 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-# ===================== SISTEMA CONVERSACIONAL MEJORADO =====================
+
+# ===================== SISTEMA CONVERSACIONAL MEJORADO CON APRENDIZAJE =====================
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
         self.contador_interacciones = 0
         self.contexto_actual = None
+        self.sistema_aprendizaje = SistemaAprendizaje()
+        self.engagement_actual = 5  # Valor por defecto de engagement
 
     def to_dict(self):
         """Convierte el objeto a un diccionario para serialización"""
         return {
             'historial': self.historial,
             'contador_interacciones': self.contador_interacciones,
-            'contexto_actual': self.contexto_actual
+            'contexto_actual': self.contexto_actual,
+            'engagement_actual': self.engagement_actual
         }
     
     @classmethod
@@ -573,31 +694,44 @@ class SistemaConversacional:
         instance.historial = data.get('historial', [])
         instance.contador_interacciones = data.get('contador_interacciones', 0)
         instance.contexto_actual = data.get('contexto_actual', None)
+        instance.engagement_actual = data.get('engagement_actual', 5)
         return instance
 
     def obtener_respuesta_predefinida(self, sintoma):
         """Obtiene una respuesta predefinida para el síntoma específico"""
         if sintoma in respuestas_por_sintoma:
             return random.choice(respuestas_por_sintoma[sintoma])
-        # Fallback genérico si el síntoma no está en el diccionario
-        return "¿Puedes contarme más sobre cómo te sientes?"
+        
+        # Respuestas genéricas empáticas como fallback
+        respuestas_genericas = [
+            "Entiendo que esto puede ser difícil de manejar. ¿Quieres contarme más sobre cómo te sientes?",
+            "Aprecio que compartas esto conmigo. ¿Hay algo específico que haya desencadenado estos sentimientos?",
+            "Es completamente normal sentirse así a veces. ¿Cómo ha afectado esto tu día a día?",
+            "Lamento escuchar que estás pasando por esto. ¿Has intentado alguna estrategia para manejar la situación?",
+            "Gracias por confiar en mí para hablar de esto. ¿Qué es lo que más te preocupa en este momento?"
+        ]
+        return random.choice(respuestas_genericas)
 
     def obtener_respuesta_ia(self, sintoma, user_input):
-        """Intenta obtener respuesta de la IA"""
+        """Intenta obtener respuesta de la IA con mejor manejo de errores"""
         try:
-            prompt = f"""
-            Eres un asistente psicológico empático. El usuario está experimentando: {sintoma}.
-            Su último mensaje: "{user_input}"
-
-            Responde de manera comprensiva y breve (máximo 2-3 oraciones), ayudando a reflexionar
-            sobre emociones sin dar diagnóstico médico. Si el usuario parece necesitar ayuda profesional
-            o menciona querer una cita, sugiere amablemente agendar una cita con un psicólogo.
+            # Preparar prompt contextualizado
+            contexto = f"""
+            El usuario está experimentando: {sintoma}. 
+            Historial reciente: {str(self.historial[-2:]) if len(self.historial) > 2 else 'Primera interacción'}
+            Último mensaje del usuario: "{user_input}"
+            
+            Por favor, responde de manera empática y profesional.
             """
             
-            respuesta = generar_respuesta_llm(prompt, modelo="llama3-70b-8192")
+            respuesta = generar_respuesta_llm(contexto, modelo="llama3-70b-8192")
             
-            # Verificar si la respuesta es válida (no un error)
-            if respuesta and not respuesta.startswith("Error"):
+            # Si falla el modelo principal, intentar con alternativo
+            if not respuesta or len(respuesta) < 10:
+                respuesta = generar_respuesta_llm(contexto, modelo="mixtral-8x7b-32768")
+            
+            # Verificar si la respuesta es válida
+            if respuesta and len(respuesta) > 10:
                 return respuesta
         except Exception as e:
             app.logger.error(f"Error al obtener respuesta de IA: {e}")
@@ -608,31 +742,87 @@ class SistemaConversacional:
     def obtener_respuesta(self, sintoma, user_input):
         # 1. Filtro de seguridad (suicidio, autolesión, etc.)
         palabras_crisis = ["suicidio", "autolesión", "autoflagelo", "matarme", "no quiero vivir", 
-                          "acabar con todo", "no vale la pena", "sin esperanza"]
-        if any(palabra in user_input.lower() for palabra in palabras_crisis):
-            return "⚠️ Este tema es muy importante. Por favor, comunícate de inmediato con tu psicólogo o llama al número de emergencias 911."
+                          "acabar con todo", "no vale la pena", "sin esperanza", "quiero morir"]
+        
+        input_lower = user_input.lower()
+        if any(palabra in input_lower for palabra in palabras_crisis):
+            return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 o con tu psicólogo de confianza."
 
         # 2. Verificar si el usuario solicita cita explícitamente
-        if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia"]):
-            return "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial?"
+        palabras_cita = ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]
+        if any(palabra in input_lower for palabra in palabras_cita):
+            return "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?"
 
-        # 3. Intentar con IA primero, luego fallback a predefinida
+        # 3. Intentar con respuesta aprendida primero
+        respuesta_aprendida = self.sistema_aprendizaje.obtener_mejor_respuesta(sintoma, user_input)
+        if respuesta_aprendida:
+            app.logger.info(f"Usando respuesta aprendida para {sintoma}")
+            self.contador_interacciones += 1
+            return respuesta_aprendida
+
+        # 4. Si no hay respuesta aprendida, usar IA
         respuesta_ia = self.obtener_respuesta_ia(sintoma, user_input)
         self.contador_interacciones += 1
         
-        # 4. Si después de algunas interacciones, sugerir cita suavemente
-        if self.contador_interacciones >= 3 and not any(palabra in respuesta_ia.lower() for palabra in ["cita", "profesional", "psicólogo"]):
-            respuesta_ia += " ¿Has considerado hablar con un psicólogo profesional? Podría ser de gran ayuda."
+        # 5. Aprender de esta interacción
+        self.aprender_de_interaccion(sintoma, user_input, respuesta_ia)
+        
+        # 6. Si después de algunas interacciones, sugerir cita suavemente
+        if self.contador_interacciones >= 3 and not any(palabra in respuesta_ia.lower() for palabra in palabras_cita):
+            respuesta_ia += " ¿Has considerado la posibilidad de hablar con un psicólogo profesional? Podría ofrecerte un apoyo más personalizado."
         
         return respuesta_ia
 
+    def aprender_de_interaccion(self, sintoma, user_input, respuesta_bot):
+        """Aprende de la interacción actual"""
+        # Calcular engagement basado en longitud de respuesta del usuario
+        engagement = min(10, len(user_input) / 10)  # Más largo = más engagement
+        
+        # Añadir al sistema de aprendizaje
+        self.sistema_aprendizaje.evaluar_respuesta(sintoma, user_input, respuesta_bot, engagement)
+        
+        # Aprender patrones de conversación
+        self.aprender_patrones(user_input, respuesta_bot)
+
+    def aprender_patrones(self, user_input, respuesta_bot):
+        """Aprende patrones de conversación comunes"""
+        palabras_usuario = set(user_input.lower().split())
+        palabras_bot = set(respuesta_bot.lower().split())
+        
+        # Simplificar para ejemplo - en la práctica usarías técnicas NLP más avanzadas
+        for palabra in palabras_usuario:
+            if palabra not in self.sistema_aprendizaje.patrones_conversacion:
+                self.sistema_aprendizaje.patrones_conversacion[palabra] = {}
+            
+            for palabra_bot in palabras_bot:
+                if palabra_bot not in self.sistema_aprendizaje.patrones_conversacion[palabra]:
+                    self.sistema_aprendizaje.patrones_conversacion[palabra][palabra_bot] = 0
+                self.sistema_aprendizaje.patrones_conversacion[palabra][palabra_bot] += 1
+        
+        self.sistema_aprendizaje.guardar_aprendizaje()
+
     def agregar_interaccion(self, tipo, mensaje, sintoma=None):
-        self.historial.append({
+        interaccion = {
             'tipo': tipo,
             'mensaje': mensaje,
             'sintoma': sintoma,
             'timestamp': datetime.now().strftime("%H:%M:%S")
-        })
+        }
+        self.historial.append(interaccion)
+        
+        # Si es una respuesta del usuario, actualizar engagement
+        if tipo == 'user' and len(self.historial) > 1:
+            ultima_respuesta_bot = self.historial[-2] if self.historial[-2]['tipo'] == 'bot' else None
+            if ultima_respuesta_bot:
+                # Calcular engagement basado en longitud de respuesta
+                self.engagement_actual = min(10, len(mensaje) / 15)
+                
+                # Aprender de esta interacción
+                self.aprender_de_interaccion(
+                    ultima_respuesta_bot['sintoma'] or "general",
+                    mensaje,
+                    ultima_respuesta_bot['mensaje']
+                )
 
 # ===================== FUNCIONES DE CALENDARIO =====================
 @lru_cache(maxsize=128)
@@ -713,6 +903,41 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
     except Exception as e:
         app.logger.error(f"Error enviando correo: {e}")
         return False
+
+# ===================== LIMPIADOR AUTOMÁTICO DE DATOS =====================
+def limpiar_datos_aprendizaje():
+    """Limpia periódicamente datos de aprendizaje antiguos o poco útiles"""
+    try:
+        # Esta función se ejecutará en un hilo separado
+        while True:
+            time.sleep(24 * 60 * 60)  # 24 horas
+            
+            # Cargar datos actuales
+            sistema_aprendizaje = SistemaAprendizaje()
+            
+            for sintoma in list(sistema_aprendizaje.respuestas_efectivas.keys()):
+                for respuesta in list(sistema_aprendizaje.respuestas_efectivas[sintoma].keys()):
+                    stats = sistema_aprendizaje.respuestas_efectivas[sintoma][respuesta]
+                    ultimo_uso = datetime.fromisoformat(stats['ultimo_uso'])
+                    
+                    # Eliminar respuestas muy antiguas o poco efectivas
+                    if (datetime.now() - ultimo_uso).days > 30 or stats['veces_usada'] < 2:
+                        del sistema_aprendizaje.respuestas_efectivas[sintoma][respuesta]
+                
+                # Eliminar síntomas sin respuestas
+                if not sistema_aprendizaje.respuestas_efectivas[sintoma]:
+                    del sistema_aprendizaje.respuestas_efectivas[sintoma]
+            
+            sistema_aprendizaje.guardar_aprendizaje()
+            app.logger.info("Limpieza automática de datos de aprendizaje completada")
+            
+    except Exception as e:
+        app.logger.error(f"Error limpiando datos de aprendizaje: {e}")
+
+# Iniciar hilo de limpieza en segundo plano (solo en producción)
+if os.environ.get('FLASK_ENV') == 'production':
+    hilo_limpieza = threading.Thread(target=limpiar_datos_aprendizaje, daemon=True)
+    hilo_limpieza.start()
 
 # ===================== RUTAS PRINCIPALES =====================
 @app.route("/", methods=["GET", "POST"])
@@ -882,6 +1107,37 @@ def reset():
         app.logger.error(f"Error al reiniciar sesión: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+# ===================== RUTAS DE MONITOREO DE APRENDIZAJE =====================
+@app.route("/admin/aprendizaje")
+@limiter.limit("10 per minute")
+def monitoreo_aprendizaje():
+    """Endpoint para monitorear el estado del aprendizaje del bot"""
+    if "conversacion_data" not in session:
+        return jsonify({"error": "No hay sesión activa"}), 400
+    
+    conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
+    
+    return jsonify({
+        "total_respuestas_aprendidas": sum(len(v) for v in conversacion.sistema_aprendizaje.respuestas_efectivas.values()),
+        "sintomas_aprendidos": list(conversacion.sistema_aprendizaje.respuestas_efectivas.keys()),
+        "patrones_detectados": len(conversacion.sistema_aprendizaje.patrones_conversacion),
+        "engagement_actual": conversacion.engagement_actual
+    })
+
+@app.route("/admin/reiniciar-aprendizaje", methods=["POST"])
+@limiter.limit("5 per minute")
+def reiniciar_aprendizaje():
+    """Reinicia el sistema de aprendizaje (solo para desarrollo)"""
+    if os.environ.get('FLASK_ENV') == 'production':
+        return jsonify({"error": "No disponible en producción"}), 403
+    
+    if "conversacion_data" in session:
+        conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
+        conversacion.sistema_aprendizaje = SistemaAprendizaje()  # Reiniciar aprendizaje
+        session["conversacion_data"] = conversacion.to_dict()
+    
+    return jsonify({"status": "Aprendizaje reiniciado"})
+
 # ===================== RUTAS ADICIONALES =====================
 @app.route("/verificar-horario", methods=["POST"])
 def verificar_horario():
@@ -934,7 +1190,7 @@ if __name__ == "__main__":
             exit(1)
     
     # Inicializar directorios necesarios
-    for directory in ["logs", "conversaciones"]:
+    for directory in ["logs", "conversaciones", "datos"]:
         if not os.path.exists(directory):
             os.makedirs(directory)
     
