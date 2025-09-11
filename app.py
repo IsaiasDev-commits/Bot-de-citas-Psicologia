@@ -153,10 +153,10 @@ class SistemaAprendizaje:
         return None  # Dejar que la IA genere una nueva respuesta
 
 # ===================== FUNCIÓN PARA GROQ API MEJORADA =====================
-def generar_respuesta_llm(prompt, modelo="llama3-70b-8192"):
+def generar_respuesta_llm(prompt, modelo="llama-3.1-70b-versatile"):
     """
     Envía un prompt al modelo de Groq usando el SDK oficial
-    Modelos disponibles: llama3-8b-8192, llama3-70b-8192, mixtral-8x7b-32768, gemma-7b-it
+    Modelos disponibles: llama-3.1-70b-versatile, llama-3.1-8b-instant, gemma2-9b-it, mixtral-8x22b-instruct
     """
     try:
         # Usar el SDK oficial de Groq
@@ -330,7 +330,7 @@ respuestas_por_sintoma = {
         "¿Cómo sueles manejar tu enojo cuando aparece?",
         "Hablar sobre lo que te molesta puede ayudarte a calmarte.",
         "¿Has probado técnicas para controlar la ira o relajarte?",
-        "Reconocer tu enojo es el primer paso para gestionarlo.",
+        "Reconcer tu enojo es el primer paso para gestionarlo.",
         "¿Cómo afecta el enojo tus relaciones personales?",
         "¿Tienes alguien con quien puedas hablar cuando estás enojado?",
         "Expresar el enojo de forma saludable es importante.",
@@ -356,7 +356,7 @@ respuestas_por_sintoma = {
         "¿Quieres contarme cómo has estado manejando este cansancio?",
         "Tomar pausas durante el día puede ayudarte a recuperar energías.",
         "Recuerda que cuidar de ti es una prioridad.",
-        "Si el agotamiento persiste, considera consultar con un profesional."
+        "If el agotamiento persiste, considera consultar con un profesional."
     ],
     "Falta de motivación": [
         "La falta de motivación puede ser difícil, pero es temporal.",
@@ -413,7 +413,7 @@ respuestas_por_sintoma = {
         "Preocuparse es normal, pero en exceso puede afectar tu vida.",
         "¿Qué pensamientos recurrentes te generan más preocupación?",
         "Hablar de tus preocupaciones puede aliviar su peso.",
-        "¿Has probado técnicas para distraer tu mente o relajarte?",
+        "¿Has probado técnicas para distraer tu mente or relajarte?",
         "Reconcer la preocupación es el primer paso para manejarla.",
         "¿Sientes que la preocupación afecta tu sueño o ánimo?",
         "¿Tienes alguien con quien puedas compartir lo que te preocupa?",
@@ -424,7 +424,7 @@ respuestas_por_sintoma = {
         "La práctica de mindfulness puede ayudar a reducir la preocupación.",
         "¿Sientes que la preocupación interfiere en tus actividades diarias?",
         "Es válido pedir ayuda si las preocupaciones son muy intensas.",
-        "Recuerda que tu bienestar es importante y mereces cuidado."
+        "Recuerda que tu bienestar es importante and hay caminos para mejorar."
     ],
     "Cambios de humor": [
         "Los cambios de humor pueden ser difíciles de manejar.",
@@ -507,7 +507,7 @@ respuestas_por_sintoma = {
         "Hablar de lo que te distrae puede ayudarte a mejorar tu foco.",
         "Reconocer este problema es importante para buscar soluciones.",
         "¿Sientes que tu mente está muy dispersa o cansada?",
-        "¿Has probado técnicas como pausas cortas o ambientes tranquilos?",
+        "¿Has probado técnicas como pausas cortas or ambientes tranquilos?",
         "El estrés y la ansiedad pueden influir en la concentración.",
         "¿Tienes alguien con quien puedas compartir cómo te sientes?",
         "Buscar apoyo puede facilitar que mejores tu atención.",
@@ -544,7 +544,7 @@ respuestas_por_sintoma = {
         "¿Sientes que la tensión afecta tu movilidad or bienestar?",
         "El descanso y una buena postura son importantes para el cuerpo.",
         "¿Tienes alguien con quien puedas compartir cómo te sientes?",
-        "Buscar ayuda puede facilitar aliviar la tensión muscular.",
+        "Buscar apoyo puede facilitar aliviar la tensión muscular.",
         "¿Quieres contarme cuándo notas más esa tensión?",
         "La conexión mente-cuerpo es clave para tu bienestar.",
         "Considera actividades como yoga o masajes para relajarte.",
@@ -706,11 +706,11 @@ class SistemaConversacional:
             Por favor, responde de manera empática y profesional.
             """
             
-            respuesta = generar_respuesta_llm(contexto, modelo="llama3-70b-8192")
+            respuesta = generar_respuesta_llm(contexto, modelo="llama-3.1-70b-versatile")
             
             # Si falla el modelo principal, intentar con alternativo
             if not respuesta or len(respuesta) < 10:
-                respuesta = generar_respuesta_llm(contexto, modelo="mixtral-8x7b-32768")
+                respuesta = generar_respuesta_llm(contexto, modelo="mixtral-8x22b-instruct")
             
             # Verificar si la respuesta es válida
             if respuesta and len(respuesta) > 10:
@@ -1181,4 +1181,10 @@ if __name__ == "__main__":
     debug = os.environ.get('FLASK_ENV') != 'production'
     
     app.logger.info(f"Iniciando aplicación Equilibra en puerto {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    
+    # En producción, usar Waitress como servidor WSGI
+    if os.environ.get('FLASK_ENV') == 'production':
+        from waitress import serve
+        serve(app, host='0.0.0.0', port=port)
+    else:
+        app.run(host='0.0.0.0', port=port, debug=debug)
