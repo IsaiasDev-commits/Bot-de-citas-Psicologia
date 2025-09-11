@@ -1031,8 +1031,32 @@
     }
 
     // ===================== CANCELAR CITA =====================
-    function cancelarCita() {
-      window.location.href = '/';
+    async function cancelarCita() {
+      mostrarEscribiendo();
+      
+      try {
+        const response = await fetch('/cancelar_cita', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+          }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          window.location.href = '/';
+        } else {
+          throw new Error(data.message || 'Error al cancelar la cita');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error al cancelar la cita. Intenta recargar la página.');
+        window.location.href = '/';
+      } finally {
+        ocultarEscribiendo();
+      }
     }
 
     // ===================== HORARIOS =====================

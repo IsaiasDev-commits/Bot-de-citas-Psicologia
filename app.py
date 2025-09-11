@@ -153,10 +153,14 @@ class SistemaAprendizaje:
         return None  # Dejar que la IA genere una nueva respuesta
 
 # ===================== FUNCIÓN PARA GROQ API MEJORADA =====================
-def generar_respuesta_llm(prompt, modelo="llama-3.1-70b-versatile"):
+def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
     """
     Envía un prompt al modelo de Groq usando el SDK oficial
-    Modelos disponibles: llama-3.1-70b-versatile, llama-3.1-8b-instant, gemma2-9b-it, mixtral-8x22b-instruct
+    Modelos disponibles: 
+    - openai/gpt-oss-20b
+    - openai/gpt-oss-120b (prioritario)
+    - llama-3.3-70b-versatile
+    - llama-3.1-8b-instant
     """
     try:
         # Usar el SDK oficial de Groq
@@ -306,7 +310,7 @@ respuestas_por_sintoma = {
         "¿La culpa viene de una expectativa tuya or de los demás?",
         "Podemos aprender de lo que pasó sin cargarlo como un castigo eterno.",
         "Todos cometemos errores. La clave está en lo que haces con eso ahora.",
-        "¿Hay algo que puedas hacer para reparar o aliviar esa carga?",
+        "¿Hay algo que puedas hacer para reparar or aliviar esa carga?",
         "A veces la culpa no es real, sino impuesta. ¿De quién es esa voz interna?",
         "Eres humano. Equivocarte no te hace menos valioso.",
         "¿Qué le dirías a un amigo if estuviera en tu lugar?",
@@ -446,7 +450,7 @@ respuestas_por_sintoma = {
         "Reconocerla es importante para buscar formas de superarla.",
         "¿Tienes alguien con quien puedas compartir tus sentimientos?",
         "Pequeños cambios en tu rutina pueden ayudar a mejorar.",
-        "¿Qué cosas te gustaría recuperar o volver a disfrutar?",
+        "¿Qué cosas te gustaría recuperar or volver a disfrutar?",
         "Es normal tener momentos bajos, sé paciente contigo mismo.",
         "¿Quieres contarme cómo te sientes en general últimamente?",
         "Buscar apoyo puede facilitar que recuperes energía e interés.",
@@ -456,7 +460,7 @@ respuestas_por_sintoma = {
         "Tu bienestar es importante and hay caminos para mejorar."
     ],
     "Sensación de vacío": [
-        "Sentir vacío puede ser muy desconcertante, gracias por compartir.",
+        "Sentir vacío puede ser muy desconcertante, gracias por compartirlo.",
         "¿Quieres contarme cuándo empezaste a sentir ese vacío?",
         "Hablar sobre ello puede ayudarte a entender mejor tus emociones.",
         "¿Hay momentos en que ese vacío se hace más presente?",
@@ -479,7 +483,7 @@ respuestas_por_sintoma = {
         "Reconocer estos pensamientos es el primer paso para manejarlos.",
         "¿Sientes que afectan cómo te ves a ti mismo o a los demás?",
         "¿Has probado técnicas para reemplazarlos por otros más positivos?",
-        "Es normal tener pensamientos negativos, pero no definen quién eres.",
+        "Es normal tener pensamientos negativos, pero no define quién eres.",
         "¿Tienes alguien con quien puedas compartir tus inquietudes?",
         "Buscar apoyo puede facilitar encontrar formas de manejarlos.",
         "¿Quieres contarme cuándo suelen aparecer esos pensamientos?",
@@ -536,7 +540,7 @@ respuestas_por_sintoma = {
         "La esperanza puede volver, paso a paso y con apoyo."
     ],
     "Tensión muscular": [
-        "La tensión muscular puede ser síntoma de estrés o ansiedad.",
+        "La tensión muscular puede ser síntoma de estrés or ansiedad.",
         "¿En qué partes de tu cuerpo sientes más tensión?",
         "Probar estiramientos suaves puede ayudarte to aliviar la tensión.",
         "¿Has intentado técnicas de relajación o respiración profunda?",
@@ -548,7 +552,7 @@ respuestas_por_sintoma = {
         "¿Quieres contarme cuándo notas más esa tensión?",
         "La conexión mente-cuerpo es clave para tu bienestar.",
         "Considera actividades como yoga o masajes para relajarte.",
-        "Si la tensión persiste, un profesional puede ayudarte.",
+        "If la tensión persiste, un profesional puede ayudarte.",
         "Recuerda que cuidar de tu cuerpo es parte del autocuidado.",
         "Estoy aquí para apoyarte y escucharte siempre."
     ],
@@ -706,11 +710,15 @@ class SistemaConversacional:
             Por favor, responde de manera empática y profesional.
             """
             
-            respuesta = generar_respuesta_llm(contexto, modelo="llama-3.1-70b-versatile")
+            # Intentar primero con el modelo prioritario
+            respuesta = generar_respuesta_llm(contexto, modelo="openai/gpt-oss-120b")
             
-            # Si falla el modelo principal, intentar con alternativo
+            # Si falla el modelo principal, intentar con alternativos
             if not respuesta or len(respuesta) < 10:
-                respuesta = generar_respuesta_llm(contexto, modelo="mixtral-8x22b-instruct")
+                respuesta = generar_respuesta_llm(contexto, modelo="llama-3.3-70b-versatile")
+            
+            if not respuesta or len(respuesta) < 10:
+                respuesta = generar_respuesta_llm(contexto, modelo="llama-3.1-8b-instant")
             
             # Verificar si la respuesta es válida
             if respuesta and len(respuesta) > 10:
@@ -1000,12 +1008,17 @@ def index():
                     )
                     conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
                 else:
+                    # MEJORA: Si el usuario cancela o no quiere cita, volver al diálogo normal
                     session["estado"] = "profundizacion"
                     respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
-                    conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
+                    conversacion.agregar_interaccion('bot', f"Entendido, continuemos conversando. {respuesta}", session["sintoma_actual"])
 
         elif estado_actual == "agendar_cita":
-            if fecha := request.form.get("fecha_cita"):
+            # MEJORA: Manejar correctamente la cancelación de citas
+            if "cancelar_cita" in request.form:
+                session["estado"] = "profundizacion"
+                conversacion.agregar_interaccion('bot', "Entendido, no hay problema. ¿Hay algo más en lo que pueda ayudarte hoy?", session["sintoma_actual"])
+            elif fecha := request.form.get("fecha_cita"):
                 telefono = request.form.get("telefono", "").strip()
 
                 if not validar_telefono(telefono):
@@ -1087,6 +1100,22 @@ def reset():
         return jsonify({"status": "success"})
     except Exception as e:
         app.logger.error(f"Error al reiniciar sesión: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# ===================== RUTA PARA CANCELAR CITA =====================
+@app.route("/cancelar_cita", methods=["POST"])
+def cancelar_cita():
+    """Nueva ruta para manejar la cancelación de citas de manera explícita"""
+    try:
+        if "conversacion_data" in session:
+            conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
+            session["estado"] = "profundizacion"
+            conversacion.agregar_interaccion('bot', "Entendido, he cancelado el proceso de agendamiento de cita. ¿Hay algo más en lo que pueda ayudarte?", session.get("sintoma_actual"))
+            session["conversacion_data"] = conversacion.to_dict()
+        
+        return jsonify({"status": "success", "message": "Proceso de cita cancelado"})
+    except Exception as e:
+        app.logger.error(f"Error al cancelar cita: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # ===================== RUTAS DE MONITOREO DE APRENDIZAJE =====================
