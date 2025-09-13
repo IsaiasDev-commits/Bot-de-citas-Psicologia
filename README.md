@@ -100,6 +100,7 @@ Guía de Uso para el Psicólogo
 
 •	Comparte este enlace con tus pacientes
 https://equlibra.onrender.com/
+
 2. Monitoreo de Citas
 •	Revisa tu correo regularmente para notificaciones de nuevas citas
 
@@ -109,6 +110,7 @@ https://equlibra.onrender.com/
 Guía de Uso para los Pacientes
 1. Inicio de Sesión
 •	Accede al enlace compartido por el psicólogo
+
 https://equlibra.onrender.com/
 
 •	No es necesario crear cuenta ni iniciar sesión
