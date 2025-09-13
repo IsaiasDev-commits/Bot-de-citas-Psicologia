@@ -116,6 +116,8 @@ https://equlibra.onrender.com/
 •	No es necesario crear cuenta ni iniciar sesión
  
 2. Proceso de Interacción
+
+   
 1.	Selección de síntoma: Elige entre los 27 síntomas disponibles
    
  <img width="511" height="384" alt="image" src="https://github.com/user-attachments/assets/df905348-5188-44cb-9b9b-d11068aa6b93" />
