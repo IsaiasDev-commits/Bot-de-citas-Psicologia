@@ -102,6 +102,7 @@ Guía de Uso para el Psicólogo
 https://equlibra.onrender.com/
 2. Monitoreo de Citas
 •	Revisa tu correo regularmente para notificaciones de nuevas citas
+
  <img width="429" height="344" alt="image" src="https://github.com/user-attachments/assets/3e30fd3f-d4ef-48a7-be37-910a9f87e978" />
 
 •	Las citas se agregan automáticamente a tu Google Calendar
@@ -120,9 +121,11 @@ https://equlibra.onrender.com/
  
 2.-     Evaluación temporal: Indica desde cuándo experimentas el síntoma
 
+
 <img width="469" height="385" alt="image" src="https://github.com/user-attachments/assets/f7742ee7-f31a-4e9e-b6ce-dc677a95b501" />
 
  3.- Diálogo con el sistema: Conversa con el sistema, basado en respuestas proporcionadas por un psicólogo profesional
+
  
  <img width="502" height="178" alt="image" src="https://github.com/user-attachments/assets/91d04146-f446-4635-9f9b-93ad1dafbd77" />
 
