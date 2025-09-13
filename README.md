@@ -114,13 +114,16 @@ https://equlibra.onrender.com/
  
 2. Proceso de Interacción
 1.	Selección de síntoma: Elige entre los 27 síntomas disponibles
+   
  <img width="511" height="384" alt="image" src="https://github.com/user-attachments/assets/df905348-5188-44cb-9b9b-d11068aa6b93" />
 
  
 2.-     Evaluación temporal: Indica desde cuándo experimentas el síntoma
+
 <img width="469" height="385" alt="image" src="https://github.com/user-attachments/assets/f7742ee7-f31a-4e9e-b6ce-dc677a95b501" />
 
  3.- Diálogo con el sistema: Conversa con el sistema, basado en respuestas proporcionadas por un psicólogo profesional
+ 
  <img width="502" height="178" alt="image" src="https://github.com/user-attachments/assets/91d04146-f446-4635-9f9b-93ad1dafbd77" />
 
  
