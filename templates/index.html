@@ -37,7 +37,7 @@
       --space-xl: 32px;
     }
 
-    /* Modo oscuro */
+    /* Modo oscuro - Mejorado contraste WCAG 2.1 AA */
     [data-theme="dark"] {
       --primary: #66BB6A;
       --primary-dark: #81C784;
@@ -46,8 +46,9 @@
       --background: #121212;
       --surface: #1E1E1E;
       --text-primary: #E0E0E0;
-      --text-secondary: #9E9E9E;
+      --text-secondary: #A0A0A0; /* Mejor contraste */
       --divider: #424242;
+      --error: #F44336; /* Rojo más visible en modo oscuro */
     }
 
     * {
@@ -136,7 +137,7 @@
       transform: translateY(-2px);
     }
 
-    /* Chat */
+    /* Chat - Mejorado para teclados virtuales */
     .chat-container {
       height: 400px;
       max-height: 60vh;
@@ -148,6 +149,14 @@
       border-radius: var(--radius-md);
       box-shadow: var(--shadow-sm);
       -webkit-overflow-scrolling: touch;
+    }
+
+    /* Mejora para teclados virtuales en móviles */
+    @media (max-height: 600px) {
+      .chat-container {
+        max-height: 50vh;
+        height: auto;
+      }
     }
 
     .message {
@@ -742,12 +751,12 @@
 
     <!-- CONTENEDOR MEJORADO para progress indicator -->
     <div class="progress-container">
-      <div class="progress-indicator">
-        <div class="step {% if estado == 'inicio' %}active{% endif %}">Inicio</div>
-        <div class="step {% if estado == 'evaluacion' %}active{% endif %}">Evaluación</div>
-        <div class="step {% if estado in ['profundizacion', 'derivacion'] %}active{% endif %}">Diálogo</div>
-        <div class="step {% if estado == 'agendar_cita' %}active{% endif %}">Cita</div>
-        <div class="step {% if estado == 'fin' %}active{% endif %}">Final</div>
+      <div class="progress-indicator" role="progressbar" aria-valuenow="{% if estado == 'inicio' %}1{% elif estado == 'evaluacion' %}2{% elif estado in ['profundizacion', 'derivacion'] %}3{% elif estado == 'agendar_cita' %}4{% elif estado == 'fin' %}5{% endif %}" aria-valuemin="1" aria-valuemax="5" aria-label="Progreso de la conversación">
+        <div class="step {% if estado == 'inicio' %}active{% endif %}" aria-current="{% if estado == 'inicio' %}step{% endif %}">Inicio</div>
+        <div class="step {% if estado == 'evaluacion' %}active{% endif %}" aria-current="{% if estado == 'evaluacion' %}step{% endif %}">Evaluación</div>
+        <div class="step {% if estado in ['profundizacion', 'derivacion'] %}active{% endif %}" aria-current="{% if estado in ['profundizacion', 'derivacion'] %}step{% endif %}">Diálogo</div>
+        <div class="step {% if estado == 'agendar_cita' %}active{% endif %}" aria-current="{% if estado == 'agendar_cita' %}step{% endif %}">Cita</div>
+        <div class="step {% if estado == 'fin' %}active{% endif %}" aria-current="{% if estado == 'fin' %}step{% endif %}">Final</div>
       </div>
     </div>
 
@@ -758,10 +767,10 @@
     {% endif %}
 
     <div class="top-controls">
-      <button class="btn-secondary" onclick="reiniciarChat()">
+      <button class="btn-secondary" onclick="reiniciarChat()" aria-label="Reiniciar conversación">
         <span class="btn-icon">🔄</span> Reiniciar
       </button>
-      <div class="toggle-dark" onclick="toggleDarkMode()">🌙</div>
+      <div class="toggle-dark" onclick="toggleDarkMode()" role="button" aria-label="Cambiar modo claro/oscuro">🌙</div>
     </div>
 
     {% if estado == "inicio" %}
@@ -771,21 +780,22 @@
           <p class="section-title">¿Cómo te sientes hoy? (Selecciona un síntoma)</p>
           {% for sintoma in sintomas %}
             <label>
-              <input type="radio" name="sintomas" value="{{ sintoma }}" required> 
+              <input type="radio" name="sintomas" value="{{ sintoma }}" required aria-describedby="sintoma-desc-{{ loop.index }}"> 
               {{ sintoma }}
             </label>
+            <span id="sintoma-desc-{{ loop.index }}" class="sr-only">Selecciona este síntoma si es cómo te sientes</span>
           {% endfor %}
         </div>
-        <input type="submit" value="Continuar →" />
+        <input type="submit" value="Continuar →" aria-label="Continuar con el síntoma seleccionado" />
       </form>
 
     {% elif estado == "evaluacion" %}
-      <div class="chat-container card">
+      <div class="chat-container card" aria-live="polite" aria-atomic="true">
         {% for msg in conversacion.historial %}
-          <div class="message {{ msg.tipo }}">
+          <div class="message {{ msg.tipo }}" role="{{ 'complementary' if msg.tipo == 'bot' else 'region' }}">
             {% if msg.tipo == 'bot' %}
               <div class="message-header">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra" class="bot-logo">
                 <strong>Equilibra:</strong>
               </div>
             {% else %}
@@ -802,18 +812,18 @@
         {% else %}
           <p class="section-title">¿Desde cuándo experimentas estos síntomas?</p>
         {% endif %}
-        <input type="date" name="fecha_inicio_sintoma" min="{{ fechas_validas.min_sintoma }}" max="{{ fechas_validas.max_sintoma }}" value="{{ fechas_validas.hoy }}" required />
-        <p class="info-msg">Selecciona la fecha aproximada cuando comenzó este síntoma</p>
-        <input type="submit" value="Continuar →" />
+        <input type="date" name="fecha_inicio_sintoma" min="{{ fechas_validas.min_sintoma }}" max="{{ fechas_validas.max_sintoma }}" value="{{ fechas_validas.hoy }}" required aria-describedby="fecha-desc" />
+        <p class="info-msg" id="fecha-desc">Selecciona la fecha aproximada cuando comenzó este síntoma</p>
+        <input type="submit" value="Continuar →" aria-label="Continuar con la fecha seleccionada" />
       </form>
 
     {% elif estado == "profundizacion" or estado == "derivacion" %}
-      <div class="chat-container card" id="chatBox">
+      <div class="chat-container card" id="chatBox" aria-live="polite" aria-atomic="true">
         {% for msg in conversacion.historial %}
-          <div class="message {{ msg.tipo }}">
+          <div class="message {{ msg.tipo }}" role="{{ 'complementary' if msg.tipo == 'bot' else 'region' }}">
             {% if msg.tipo == 'bot' %}
               <div class="message-header">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra" class="bot-logo">
                 <strong>Equilibra:</strong>
               </div>
             {% else %}
@@ -822,8 +832,8 @@
             {{ msg.mensaje }}
           </div>
         {% endfor %}
-        <div id="typingIndicator" class="typing-indicator" style="display: none;">
-          <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+        <div id="typingIndicator" class="typing-indicator" style="display: none;" aria-live="polite" aria-label="Equilibra está escribiendo">
+          <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra" class="bot-logo">
           <div class="typing-dots">
             <span></span>
             <span></span>
@@ -833,22 +843,22 @@
       </div>
       <form method="POST" action="/" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <textarea name="user_input" placeholder="Escribe tu respuesta aquí..." rows="3" required></textarea>
+        <textarea name="user_input" placeholder="Escribe tu respuesta aquí..." rows="3" required aria-label="Escribe tu respuesta"></textarea>
         <div class="form-row">
-          <input type="submit" value="Enviar ✉️" />
-          <button type="button" class="btn-secondary" onclick="solicitarCita()">
+          <input type="submit" value="Enviar ✉️" aria-label="Enviar mensaje" />
+          <button type="button" class="btn-secondary" onclick="solicitarCita()" aria-label="Solicitar cita con profesional">
             <span class="btn-icon">📅</span> Solicitar cita
           </button>
         </div>
       </form>
 
     {% elif estado == "agendar_cita" %}
-      <div class="chat-container card">
+      <div class="chat-container card" aria-live="polite" aria-atomic="true">
         {% for msg in conversacion.historial %}
-          <div class="message {{ msg.tipo }}">
+          <div class="message {{ msg.tipo }}" role="{{ 'complementary' if msg.tipo == 'bot' else 'region' }}">
             {% if msg.tipo == 'bot' %}
               <div class="message-header">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra" class="bot-logo">
                 <strong>Equilibra:</strong>
               </div>
             {% else %}
@@ -861,14 +871,14 @@
       <form method="POST" action="/" id="citaForm" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <p class="section-title">Selecciona una fecha para tu cita:</p>
-        <input type="date" name="fecha_cita" min="{{ fechas_validas.min_cita }}" max="{{ fechas_validas.max_cita }}" required />
+        <input type="date" name="fecha_cita" min="{{ fechas_validas.min_cita }}" max="{{ fechas_validas.max_cita }}" required aria-describedby="fecha-cita-desc" />
 
         <p class="section-title">Selecciona un horario disponible:</p>
-        <select name="hora_cita" required disabled>
+        <select name="hora_cita" required disabled aria-describedby="hora-cita-desc">
           <option value="" disabled selected>Selecciona una hora</option>
         </select>
-        <div id="sinAtencion" class="warning-msg" style="display:none;">🚫 No hay atención los domingos</div>
-        <div id="cargandoHorarios" class="info-msg" style="display:none;">Cargando horarios disponibles...</div>
+        <div id="sinAtencion" class="warning-msg" style="display:none;" aria-live="polite">🚫 No hay atención los domingos</div>
+        <div id="cargandoHorarios" class="info-msg" style="display:none;" aria-live="polite">Cargando horarios disponibles...</div>
 
         <p class="section-title">Teléfono de contacto (requerido):</p>
         <input type="tel" name="telefono" id="telefonoInput" 
@@ -879,28 +889,30 @@
                maxlength="10"
                minlength="10"
                oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-               required />
-        <div id="telefonoError" class="error-message">
+               required 
+               aria-describedby="telefono-desc telefonoError" />
+        <p class="info-msg" id="telefono-desc">Formato: 09 seguido de 8 dígitos (ej: 0991234567)</p>
+        <div id="telefonoError" class="error-message" role="alert">
           El teléfono debe comenzar con 09 y tener 10 dígitos exactos
         </div>
         
         <input type="hidden" name="solicitar_cita" value="true">
         
         <div class="form-row">
-          <input type="submit" value="✅ Confirmar cita" id="submitCita" />
-          <button type="button" class="btn-secondary" onclick="cancelarCita()">
+          <input type="submit" value="✅ Confirmar cita" id="submitCita" aria-label="Confirmar cita" />
+          <button type="button" class="btn-secondary" onclick="cancelarCita()" aria-label="Cancelar proceso de cita">
             <span class="btn-icon">❌</span> Cancelar
           </button>
         </div>
       </form>
 
     {% elif estado == "fin" %}
-      <div class="chat-container card">
+      <div class="chat-container card" aria-live="polite" aria-atomic="true">
         {% for msg in conversacion.historial %}
-          <div class="message {{ msg.tipo }}">
+          <div class="message {{ msg.tipo }}" role="{{ 'complementary' if msg.tipo == 'bot' else 'region' }}">
             {% if msg.tipo == 'bot' %}
               <div class="message-header">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="bot-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra" class="bot-logo">
                 <strong>Equilibra:</strong>
               </div>
             {% else %}
@@ -912,7 +924,7 @@
       </div>
       <div class="card">
         <p class="info-msg">Gracias por confiar en Equilibra. Siempre estamos aquí cuando nos necesites.</p>
-        <button type="button" onclick="reiniciarChat()">
+        <button type="button" onclick="reiniciarChat()" aria-label="Comenzar nueva conversación">
           <span class="btn-icon">🔄</span> Nueva conversación
         </button>
       </div>
@@ -925,6 +937,7 @@
       document.body.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
       document.querySelector('.toggle-dark').textContent = theme === 'dark' ? '☀️' : '🌙';
+      document.querySelector('.toggle-dark').setAttribute('aria-label', theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
     }
 
     function toggleDarkMode() {
@@ -964,6 +977,13 @@
       if (indicator) {
         indicator.style.display = 'none';
       }
+    }
+
+    function sanitizarTexto(texto) {
+      // Función de sanitización para prevenir XSS
+      const div = document.createElement('div');
+      div.textContent = texto;
+      return div.innerHTML;
     }
 
     function solicitarCita() {
@@ -1237,7 +1257,7 @@
           }, 300);
         }
 
-        // Mejorar el desplazamiento táctil
+        // Mejorar el desplazamiento táctil con passive listeners
         let isDragging = false;
         let startX;
         let scrollLeft;
@@ -1267,7 +1287,7 @@
           progressContainer.scrollLeft = scrollLeft - walk;
         });
 
-        // Soporte para touch devices
+        // Soporte para touch devices con passive listeners
         progressContainer.addEventListener('touchstart', (e) => {
           startX = e.touches[0].pageX - progressContainer.offsetLeft;
           scrollLeft = progressContainer.scrollLeft;
@@ -1283,13 +1303,15 @@
     });
 
     // Mejorar feedback táctil
-    document.querySelectorAll('button, input[type="submit"], label').forEach(el => {
+    const touchElements = document.querySelectorAll('button, input[type="submit"], label');
+    touchElements.forEach(el => {
       el.addEventListener('touchstart', () => {
         el.style.transform = 'scale(0.98)';
-      });
+      }, { passive: true });
+      
       el.addEventListener('touchend', () => {
         el.style.transform = 'scale(1)';
-      });
+      }, { passive: true });
     });
 
     // Evitar zoom con doble toque
@@ -1343,6 +1365,15 @@
       setTimeout(() => {
         scrollToBottom();
       }, 300);
+    });
+
+    // Limpiar event listeners al salir de la página para evitar memory leaks
+    window.addEventListener('beforeunload', function() {
+      const elements = document.querySelectorAll('button, input, textarea, select');
+      elements.forEach(el => {
+        const newEl = el.cloneNode(true);
+        el.parentNode.replaceChild(newEl, el);
+      });
     });
   </script>
 </body>

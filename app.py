@@ -24,6 +24,8 @@ from markupsafe import escape
 import threading
 import time
 from groq import Groq
+import html
+from typing import Tuple, Optional
 
 # ===================== CONFIGURACIÓN INICIAL =====================
 load_dotenv()
@@ -85,33 +87,43 @@ class SistemaAprendizaje:
         self.respuestas_efectivas = {}  # Almacena respuestas que han funcionado bien
         self.patrones_conversacion = {}  # Aprende patrones de conversación
         self.archivo_aprendizaje = "datos/aprendizaje.json"
+        self.lock = threading.Lock()  # Lock para concurrencia
         self.cargar_aprendizaje()
     
     def cargar_aprendizaje(self):
-        """Carga los datos de aprendizaje desde archivo"""
+        """Carga los datos de aprendizaje desde archivo con lock"""
         try:
-            if os.path.exists(self.archivo_aprendizaje):
-                with open(self.archivo_aprendizaje, 'r', encoding='utf-8') as f:
-                    datos = json.load(f)
-                    self.respuestas_efectivas = datos.get('respuestas_efectivas', {})
-                    self.patrones_conversacion = datos.get('patrones_conversacion', {})
+            with self.lock:
+                if os.path.exists(self.archivo_aprendizaje):
+                    with open(self.archivo_aprendizaje, 'r', encoding='utf-8') as f:
+                        datos = json.load(f)
+                        self.respuestas_efectivas = datos.get('respuestas_efectivas', {})
+                        self.patrones_conversacion = datos.get('patrones_conversacion', {})
         except Exception as e:
             app.logger.error(f"Error cargando aprendizaje: {e}")
     
     def guardar_aprendizaje(self):
-        """Guarda los datos de aprendizaje en archivo"""
+        """Guarda los datos de aprendizaje en archivo con lock"""
         try:
-            os.makedirs(os.path.dirname(self.archivo_aprendizaje), exist_ok=True)
-            with open(self.archivo_aprendizaje, 'w', encoding='utf-8') as f:
-                json.dump({
-                    'respuestas_efectivas': self.respuestas_efectivas,
-                    'patrones_conversacion': self.patrones_conversacion
-                }, f, ensure_ascii=False, indent=2)
+            with self.lock:
+                os.makedirs(os.path.dirname(self.archivo_aprendizaje), exist_ok=True)
+                with open(self.archivo_aprendizaje, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        'respuestas_efectivas': self.respuestas_efectivas,
+                        'patrones_conversacion': self.patrones_conversacion
+                    }, f, ensure_ascii=False, indent=2)
         except Exception as e:
             app.logger.error(f"Error guardando aprendizaje: {e}")
     
     def evaluar_respuesta(self, sintoma, respuesta_usuario, respuesta_bot, engagement):
         """Evalúa qué tan efectiva fue la respuesta del bot"""
+        # Validar integridad de datos antes de guardar
+        if not isinstance(sintoma, str) or not sintoma.strip():
+            return
+            
+        if not isinstance(respuesta_bot, str) or not respuesta_bot.strip():
+            return
+            
         # Calcular efectividad basada en engagement (longitud de respuesta, tiempo de interacción, etc.)
         efectividad = min(10, max(1, engagement))
         
@@ -163,8 +175,14 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
     - llama-3.1-8b-instant
     """
     try:
+        # Validar API key
+        api_key = os.getenv('GROQ_API_KEY')
+        if not api_key:
+            app.logger.error("GROQ_API_KEY no configurada")
+            return None
+            
         # Usar el SDK oficial de Groq
-        client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+        client = Groq(api_key=api_key)
         
         completion = client.chat.completions.create(
             model=modelo,
@@ -212,15 +230,27 @@ def sanitizar_input(texto):
     """Elimina caracteres peligrosos, escapa HTML y limita la longitud"""
     if not texto:
         return ""
-    texto = escape(texto)
+    # Escapar primero
+    texto = html.escape(texto)
+    # Eliminar caracteres potencialmente peligrosos
     texto = re.sub(r'[<>{}[\]();]', '', texto)
     return texto[:500] if len(texto) > 500 else texto
 
-def validar_telefono(telefono):
+def validar_telefono(telefono) -> Tuple[bool, str]:
     """Valida que el teléfono tenga el formato correcto (09xxxxxxxx)"""
     if not telefono:
-        return False
-    return re.match(r'^09\d{8}$', telefono) is not None
+        return False, "El teléfono no puede estar vacío"
+    
+    # Eliminar espacios y caracteres especiales
+    telefono_limpio = re.sub(r'[^\d]', '', telefono)
+    
+    if len(telefono_limpio) != 10:
+        return False, "El teléfono debe tener 10 dígitos"
+    
+    if not telefono_limpio.startswith('09'):
+        return False, "El teléfono debe comenzar con 09"
+    
+    return True, ""
 
 def calcular_duracion_dias(fecha_str):
     if not fecha_str:
@@ -230,6 +260,21 @@ def calcular_duracion_dias(fecha_str):
         return (datetime.now() - fecha_inicio).days
     except ValueError:
         return 0
+
+def detectar_crisis(texto):
+    """Detección mejorada de crisis con expresiones regulares"""
+    patrones_crisis = [
+        r'suicid', r'autolesión', r'autoflagelo', r'matarme', 
+        r'no\s+quiero\s+vivir', r'acabar\s+con\s+todo', 
+        r'no\s+vale\s+la\s+pena', r'sin\s+esperanza', 
+        r'quiero\s+morir', r'terminar\s+con\s+todo'
+    ]
+    
+    texto = texto.lower()
+    for patron in patrones_crisis:
+        if re.search(patron, texto):
+            return True
+    return False
 
 # ===================== DATOS DE SÍNTOMAS =====================
 sintomas_disponibles = [
@@ -654,7 +699,6 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-
 # ===================== SISTEMA CONVERSACIONAL MEJORADO CON APRENDIZAJE =====================
 class SistemaConversacional:
     def __init__(self):
@@ -663,11 +707,12 @@ class SistemaConversacional:
         self.contexto_actual = None
         self.sistema_aprendizaje = SistemaAprendizaje()
         self.engagement_actual = 5  # Valor por defecto de engagement
+        self.max_historial = 100  # Límite de mensajes en historial
 
     def to_dict(self):
         """Convierte el objeto a un diccionario para serialización"""
         return {
-            'historial': self.historial,
+            'historial': self.historial[-self.max_historial:],  # Limitar historial
             'contador_interacciones': self.contador_interacciones,
             'contexto_actual': self.contexto_actual,
             'engagement_actual': self.engagement_actual
@@ -714,11 +759,13 @@ class SistemaConversacional:
             respuesta = generar_respuesta_llm(contexto, modelo="openai/gpt-oss-120b")
             
             # Si falla el modelo principal, intentar con alternativos
-            if not respuesta or len(respuesta) < 10:
-                respuesta = generar_respuesta_llm(contexto, modelo="llama-3.3-70b-versatile")
+            modelos_alternativos = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
             
             if not respuesta or len(respuesta) < 10:
-                respuesta = generar_respuesta_llm(contexto, modelo="llama-3.1-8b-instant")
+                for modelo in modelos_alternativos:
+                    respuesta = generar_respuesta_llm(contexto, modelo=modelo)
+                    if respuesta and len(respuesta) >= 10:
+                        break
             
             # Verificar si la respuesta es válida
             if respuesta and len(respuesta) > 10:
@@ -730,16 +777,13 @@ class SistemaConversacional:
         return self.obtener_respuesta_predefinida(sintoma)
 
     def obtener_respuesta(self, sintoma, user_input):
-        # 1. Filtro de seguridad (suicidio, autolesión, etc.)
-        palabras_crisis = ["suicidio", "autolesión", "autoflagelo", "matarme", "no quiero vivir", 
-                          "acabar con todo", "no vale la pena", "sin esperanza", "quiero morir"]
-        
-        input_lower = user_input.lower()
-        if any(palabra in input_lower for palabra in palabras_crisis):
+        # 1. Filtro de seguridad mejorado (suicidio, autolesión, etc.)
+        if detectar_crisis(user_input):
             return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 o con tu psicólogo de confianza."
 
         # 2. Verificar si el usuario solicita cita explícitamente
         palabras_cita = ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]
+        input_lower = user_input.lower()
         if any(palabra in input_lower for palabra in palabras_cita):
             return "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?"
 
@@ -792,6 +836,10 @@ class SistemaConversacional:
         self.sistema_aprendizaje.guardar_aprendizaje()
 
     def agregar_interaccion(self, tipo, mensaje, sintoma=None):
+        # Limitar tamaño del historial
+        if len(self.historial) >= self.max_historial:
+            self.historial.pop(0)
+            
         interaccion = {
             'tipo': tipo,
             'mensaje': mensaje,
@@ -815,9 +863,13 @@ class SistemaConversacional:
                 )
 
 # ===================== FUNCIONES DE CALENDARIO =====================
-@lru_cache(maxsize=128)
 def get_calendar_service():
     try:
+        # Validar que las credenciales existan
+        if 'GOOGLE_CREDENTIALS' not in os.environ:
+            app.logger.error("GOOGLE_CREDENTIALS no configuradas")
+            return None
+            
         creds_dict = json.loads(os.environ['GOOGLE_CREDENTIALS'])
         creds = service_account.Credentials.from_service_account_info(
             creds_dict,
@@ -830,6 +882,10 @@ def get_calendar_service():
 
 def crear_evento_calendar(fecha, hora, telefono, sintoma):
     try:
+        # Validar formato de fecha y hora
+        datetime.strptime(fecha, "%Y-%m-%d")
+        datetime.strptime(hora, "%H:%M")
+        
         service = get_calendar_service()
         if not service:
             return None
@@ -852,6 +908,9 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
         ).execute()
         
         return event.get('htmlLink')
+    except ValueError as ve:
+        app.logger.error(f"Formato de fecha/hora inválido: {ve}")
+        return None
     except HttpError as error:
         app.logger.error(f"Error al crear evento: {error}")
         return None
@@ -902,8 +961,10 @@ def limpiar_datos_aprendizaje():
         while True:
             time.sleep(24 * 60 * 60)  # 24 horas
             
-            # Cargar datos actuales
+            # Verificar si hay datos que limpiar
             sistema_aprendizaje = SistemaAprendizaje()
+            if not sistema_aprendizaje.respuestas_efectivas:
+                continue
             
             for sintoma in list(sistema_aprendizaje.respuestas_efectivas.keys()):
                 for respuesta in list(sistema_aprendizaje.respuestas_efectivas[sintoma].keys()):
@@ -983,7 +1044,7 @@ def index():
                 respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], "")
                 conversacion.agregar_interaccion('bot', f"{comentario} {respuesta}", session["sintoma_actual"])
 
-        elif estado_actual == "profundizacion":
+        elif estado_actual == "profundizacion" or estado_actual == "derivacion":
             if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
@@ -1021,8 +1082,10 @@ def index():
             elif fecha := request.form.get("fecha_cita"):
                 telefono = request.form.get("telefono", "").strip()
 
-                if not validar_telefono(telefono):
-                    conversacion.agregar_interaccion('bot', "⚠️ El teléfono debe comenzar con 09 y tener 10 dígitos numéricos. Por favor, ingrésalo de nuevo.", None)
+                # Validar teléfono con mensaje específico
+                valido, mensaje_error = validar_telefono(telefono)
+                if not valido:
+                    conversacion.agregar_interaccion('bot', f"⚠️ {mensaje_error}. Por favor, ingrésalo de nuevo.", None)
                     session["conversacion_data"] = conversacion.to_dict()
                     return redirect(url_for("index"))
 
