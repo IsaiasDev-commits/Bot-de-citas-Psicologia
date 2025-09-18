@@ -1116,7 +1116,7 @@ def index():
                             session["sintoma_actual"]
                         ):
                             mensaje = (
-                                f"✅ Cita presencial confirmada para {cita['fecha']} a las {cita['hora']}. " 
+                                f"✅ Cita confirmada para {cita['fecha']} a las {cita['hora']}. " 
                                 "Recibirás una llamada para coordinar tu consulta. " 
                                 "¡Gracias por confiar en nosotros!"
                             )
