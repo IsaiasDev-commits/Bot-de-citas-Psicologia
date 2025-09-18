@@ -53,16 +53,14 @@ if 'RENDER' in os.environ:
 
 csrf = CSRFProtect(app)
 
-# Rate limiting principal - más permisivo
 limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["2000 per day", "500 per hour"],
     storage_uri="memory://",
-    strategy="fixed-window"  # Estrategia más simple
+    strategy="fixed-window"
 )
 
-# Rate limiting específico para citas - más permisivo
 cita_limiter = Limiter(
     get_remote_address,
     app=app,
@@ -78,7 +76,6 @@ handler = RotatingFileHandler('logs/app.log', maxBytes=10000, backupCount=3)
 handler.setLevel(logging.INFO)
 app.logger.addHandler(handler)
 
-# Configurar logging más detallado
 logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
 
@@ -93,7 +90,6 @@ if not os.path.exists("conversaciones"):
 if not os.path.exists("datos"):
     os.makedirs("datos")
 
-# Cache para horarios verificados
 horarios_cache = {}
 cache_lock = threading.Lock()
 
@@ -273,7 +269,7 @@ sintomas_disponibles = [
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
 
-# Respuestas por síntoma (resumidas para brevedad)
+# Respuestas genéricas en lugar de específicas por síntoma
 respuestas_por_sintoma = {
      "Ansiedad": [
         "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
@@ -713,17 +709,7 @@ class SistemaConversacional:
         return instance
 
     def obtener_respuesta_predefinida(self, sintoma):
-        if sintoma in respuestas_por_sintoma:
-            return random.choice(respuestas_por_sintoma[sintoma])
-        
-        respuestas_genericas = [
-            "Entiendo que esto puede ser difícil de manejar. ¿Quieres contarme más sobre cómo te sientes?",
-            "Aprecio que compartas esto conmigo. ¿Hay algo específico que haya desencadenado estos sentimientos?",
-            "Es completamente normal sentirse así a veces. ¿Cómo ha afectado esto tu día a día?",
-            "Lamento escuchar que estás pasando por esto. ¿Has intentado alguna estrategia para manejar la situación?",
-            "Gracias por confiar en mí para hablar de esto. ¿Qué es lo que más te preocupa en este momento?"
-        ]
-        return random.choice(respuestas_genericas)
+        return random.choice(respuestas_por_sintoma)
 
     def obtener_respuesta_ia(self, sintoma, user_input):
         try:
@@ -759,7 +745,7 @@ class SistemaConversacional:
         palabras_cita = ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]
         input_lower = user_input.lower()
         
-        # Si el usuario solicita cita explícitamente
+        # SI EL USUARIO SOLICITA CITA EXPLÍCITAMENTE, OFRECERLA INMEDIATAMENTE
         if any(palabra in input_lower for palabra in palabras_cita):
             return "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?"
 
@@ -777,8 +763,10 @@ class SistemaConversacional:
         # Aprender de esta interacción
         self.aprender_de_interaccion(sintoma, user_input, respuesta_ia)
         
-        # Si después de algunas interacciones, sugerir cita suavemente
-        if self.contador_interacciones >= 3 and not any(palabra in respuesta_ia.lower() for palabra in palabras_cita):
+        # SOLO sugerir cita después de 3 interacciones si el usuario NO la ha solicitado
+        if (self.contador_interaccions >= 3 and 
+            not any(palabra in respuesta_ia.lower() for palabra in palabras_cita) and
+            not any(palabra in input_lower for palabra in palabras_cita)):
             respuesta_ia += " ¿Has considerado la posibilidad de hablar con un psicólogo profesional? Podría ofrecerte un apoyo más personalizado."
         
         return respuesta_ia
@@ -938,16 +926,15 @@ def limpiar_datos_aprendizaje():
     except Exception as e:
         app.logger.error(f"Error limpiando datos de aprendizaje: {e}")
 
-# Limpiar cache de horarios periódicamente
 def limpiar_cache_horarios():
     try:
         while True:
-            time.sleep(3600)  # Limpiar cada hora
+            time.sleep(3600)
             with cache_lock:
                 now = time.time()
                 keys_to_delete = []
                 for key, (timestamp, _) in horarios_cache.items():
-                    if now - timestamp > 1800:  # 30 minutos
+                    if now - timestamp > 1800:
                         keys_to_delete.append(key)
                 
                 for key in keys_to_delete:
@@ -989,7 +976,6 @@ def index():
     if request.method == "POST":
         estado_actual = session["estado"]
         
-        # Logging para depuración
         app.logger.info(f"Estado actual: {estado_actual}, datos del formulario: {dict(request.form)}")
 
         if estado_actual == "inicio":
@@ -1021,22 +1007,37 @@ def index():
             user_input = sanitizar_input(request.form.get("user_input", "").strip())
             solicitar_cita = request.form.get("solicitar_cita")
             
-            # CORRECCIÓN: Comparación corregida con lowercase
             if solicitar_cita and solicitar_cita.lower() == "true":
-                # El usuario hizo clic en el botón de solicitar cita
-                session["estado"] = "derivacion"
+                # El usuario hizo clic en el botón de solicitar cita - IR DIRECTAMENTE A AGENDAR
+                session["estado"] = "agendar_cita"
                 conversacion.agregar_interaccion('user', "Quiero agendar una cita", session["sintoma_actual"])
-                conversacion.agregar_interaccion('bot', "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?", session["sintoma_actual"])
-                app.logger.info("Usuario solicitó cita mediante botón")
+                
+                mensaje = (
+                    "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
+                    "📅 Selecciona una fecha disponible\n"
+                    "⏰ Elige un horario que te convenga\n"
+                    "📱 Ingresa tu número de teléfono para contactarte"
+                )
+                conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
+                app.logger.info("Usuario solicitó cita mediante botón - Saltando a agendamiento")
+                
             elif user_input:
                 # El usuario envió un mensaje de texto
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar", "sí", "si", "quiero"]):
-                    session["estado"] = "derivacion"
-                    conversacion.agregar_interaccion('bot', "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?", session["sintoma_actual"])
-                    app.logger.info("Usuario solicitó cita mediante mensaje de texto")
+                # Si el usuario menciona cita en el texto, IR DIRECTAMENTE
+                if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]):
+                    session["estado"] = "agendar_cita"
+                    mensaje = (
+                        "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
+                        "📅 Selecciona una fecha disponible\n"
+                        "⏰ Elige un horario que te convenga\n"
+                        "📱 Ingresa tu número de teléfono para contactarte"
+                    )
+                    conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
+                    app.logger.info("Usuario solicitó cita mediante texto - Saltando a agendamiento")
                 else:
+                    # Conversación normal
                     respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
                     conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
 
@@ -1044,8 +1045,10 @@ def index():
             user_input = sanitizar_input(request.form.get("user_input", "").strip())
             solicitar_cita = request.form.get("solicitar_cita")
             
-            # CORRECCIÓN: Comparación corregida con lowercase
-            if (solicitar_cita and solicitar_cita.lower() == "true") or (user_input and any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale", "por favor"])):
+            # Si solicita cita (por botón o texto), IR DIRECTAMENTE
+            if (solicitar_cita and solicitar_cita.lower() == "true") or \
+               (user_input and any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale", "por favor"])):
+                
                 session["estado"] = "agendar_cita"
                 mensaje = (
                     "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
@@ -1054,8 +1057,10 @@ def index():
                     "📱 Ingresa tu número de teléfono para contactarte"
                 )
                 conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
-                app.logger.info("Usuario confirmó agendar cita")
+                app.logger.info("Usuario confirmó agendar cita - Saltando a agendamiento")
+                
             elif user_input:
+                # Si no quiere cita, volver a conversación normal
                 session["estado"] = "profundizacion"
                 respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
                 conversacion.agregar_interaccion('bot', f"Entendido, continuemos conversando. {respuesta}", session["sintoma_actual"])
@@ -1171,14 +1176,12 @@ def verificar_horario():
         if not data or 'fecha' not in data or 'hora' not in data:
             return jsonify({"error": "Datos incompletos"}), 400
         
-        # Verificar cache primero
         cache_key = f"{data['fecha']}_{data['hora']}"
         current_time = time.time()
         
         with cache_lock:
             if cache_key in horarios_cache:
                 cache_time, cached_result = horarios_cache[cache_key]
-                # Usar cache si tiene menos de 5 minutos
                 if current_time - cache_time < 300:
                     app.logger.info(f"Usando cache para {cache_key}")
                     return jsonify(cached_result)
@@ -1192,12 +1195,11 @@ def verificar_horario():
             timeMin=f"{data['fecha']}T{data['hora']}:00-05:00",
             timeMax=f"{data['fecha']}T{int(data['hora'].split(':')[0])+1}:00:00-05:00",
             singleEvents=True,
-            maxResults=1  # Solo necesitamos saber si hay eventos
+            maxResults=1
         ).execute()
         
         disponible = len(eventos.get('items', [])) == 0
         
-        # Guardar en cache
         with cache_lock:
             horarios_cache[cache_key] = (current_time, {"disponible": disponible})
         
@@ -1218,18 +1220,15 @@ def agendar_cita():
         if not data:
             return jsonify({"error": "Datos incompletos"}), 400
             
-        # Validar datos requeridos
         required_fields = ["fecha", "hora", "telefono", "sintoma"]
         for field in required_fields:
             if field not in data or not data[field]:
                 return jsonify({"error": f"Campo requerido: {field}"}), 400
         
-        # Validar teléfono
         valido, mensaje_error = validar_telefono(data["telefono"])
         if not valido:
             return jsonify({"error": mensaje_error}), 400
             
-        # Crear evento en calendario
         evento_url = crear_evento_calendar(
             data["fecha"],
             data["hora"],
@@ -1240,7 +1239,6 @@ def agendar_cita():
         if not evento_url:
             return jsonify({"error": "Error al crear la cita en el calendario"}), 500
             
-        # Enviar correo de confirmación
         if not enviar_correo_confirmacion(
             os.getenv("PSICOLOGO_EMAIL"),
             data["fecha"],
