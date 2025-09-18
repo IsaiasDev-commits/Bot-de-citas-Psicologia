@@ -53,10 +53,19 @@ if 'RENDER' in os.environ:
 
 csrf = CSRFProtect(app)
 
+# Rate limiting principal
 limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["1000 per day", "200 per hour"],
+    storage_uri="memory://"
+)
+
+# Rate limiting específico para citas
+cita_limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["50 per hour", "10 per minute"],
     storage_uri="memory://"
 )
 
@@ -1110,7 +1119,7 @@ def cancelar_cita():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/verificar-horario", methods=["POST"])
-@limiter.limit("30 per minute")  
+@cita_limiter.limit("30 per minute")
 def verificar_horario():
     try:
         data = request.get_json()
@@ -1134,6 +1143,56 @@ def verificar_horario():
     except Exception as e:
         app.logger.error(f"Error inesperado al verificar horario: {e}")
         return jsonify({"error": "Error interno del servidor"}), 500
+
+@app.route("/agendar-cita", methods=["POST"])
+@cita_limiter.limit("20 per minute")
+def agendar_cita():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Datos incompletos"}), 400
+            
+        # Validar datos requeridos
+        required_fields = ["fecha", "hora", "telefono", "sintoma"]
+        for field in required_fields:
+            if field not in data or not data[field]:
+                return jsonify({"error": f"Campo requerido: {field}"}), 400
+        
+        # Validar teléfono
+        valido, mensaje_error = validar_telefono(data["telefono"])
+        if not valido:
+            return jsonify({"error": mensaje_error}), 400
+            
+        # Crear evento en calendario
+        evento_url = crear_evento_calendar(
+            data["fecha"],
+            data["hora"],
+            data["telefono"],
+            data["sintoma"]
+        )
+        
+        if not evento_url:
+            return jsonify({"error": "Error al crear la cita en el calendario"}), 500
+            
+        # Enviar correo de confirmación
+        if not enviar_correo_confirmacion(
+            os.getenv("PSICOLOGO_EMAIL"),
+            data["fecha"],
+            data["hora"],
+            data["telefono"],
+            data["sintoma"]
+        ):
+            app.logger.warning("Cita agendada pero error al enviar correo de confirmación")
+            
+        return jsonify({
+            "status": "success",
+            "message": "Cita agendada exitosamente",
+            "evento_url": evento_url
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error al agendar cita: {e}")
+        return jsonify({"error": "Error al procesar la cita"}), 500
 
 @app.route('/health')
 def health_check():

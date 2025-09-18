@@ -980,7 +980,6 @@
     }
 
     function sanitizarTexto(texto) {
-      // Función de sanitización para prevenir XSS
       const div = document.createElement('div');
       div.textContent = texto;
       return div.innerHTML;
@@ -989,7 +988,6 @@
     function solicitarCita() {
       mostrarEscribiendo();
       
-      // Crear un formulario oculto para enviar la solicitud de cita
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = '/';
@@ -1079,7 +1077,7 @@
       }
     }
 
-    // HORARIOS 
+    // ===================== HORARIOS =====================
     const horariosPorDia = {
       0: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Lunes
       1: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Martes
@@ -1096,9 +1094,33 @@
     const cargandoHorarios = document.getElementById("cargandoHorarios");
     const citaForm = document.getElementById("citaForm");
 
+    // Cache para horarios ya verificados
+    const horariosCache = new Map();
+
+    // Función con reintentos para solicitudes importantes
+    async function fetchWithRetry(url, options, maxRetries = 3) {
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          const response = await fetch(url, options);
+          
+          if (response.status === 429) {
+            // Esperar antes de reintentar (backoff exponencial)
+            const waitTime = Math.pow(2, i) * 1000;
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            continue;
+          }
+          
+          return response;
+        } catch (error) {
+          if (i === maxRetries - 1) throw error;
+          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+        }
+      }
+    }
+
     async function verificarDisponibilidad(fecha, hora) {
       try {
-        const response = await fetch('/verificar-horario', {
+        const response = await fetchWithRetry('/verificar-horario', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -1106,15 +1128,67 @@
           },
           body: JSON.stringify({ fecha, hora })
         });
+        
+        if (response.status === 429) {
+          throw new Error('Demasiadas solicitudes. Por favor espera un momento.');
+        }
+        
+        if (!response.ok) {
+          throw new Error('Error al verificar disponibilidad');
+        }
+        
         return await response.json();
       } catch (error) {
         console.error('Error:', error);
-        return { disponible: false, mensaje: 'Error al verificar' };
+        return { 
+          disponible: false, 
+          mensaje: error.message || 'Error al verificar disponibilidad' 
+        };
+      }
+    }
+
+    function actualizarSelectHorarios(horarios) {
+      let optionsHTML = '<option value="" disabled selected>Selecciona una hora</option>';
+      
+      for (const { hora, disponible } of horarios) {
+        if (disponible) {
+          optionsHTML += `<option value="${hora}" class="hora-disponible">${hora} ✔ Disponible</option>`;
+        } else {
+          optionsHTML += `<option value="${hora}" disabled class="hora-ocupada">${hora} ✖ Ocupado</option>`;
+        }
+      }
+      
+      if (selectHora) {
+        selectHora.innerHTML = optionsHTML;
+        selectHora.disabled = false;
+      }
+    }
+
+    function mostrarError(mensaje) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'error-message';
+      errorDiv.style.cssText = 'display: block; padding: 10px; margin: 10px 0; background: #ffebee; border: 1px solid #f44336; border-radius: 8px; color: #d32f2f;';
+      errorDiv.textContent = mensaje;
+      
+      const form = document.querySelector('form');
+      if (form) {
+        form.insertBefore(errorDiv, form.firstChild);
+        
+        setTimeout(() => {
+          errorDiv.remove();
+        }, 5000);
       }
     }
 
     async function cargarHorariosDisponibles(fecha) {
       if (!fecha) return;
+      
+      // Verificar cache primero
+      if (horariosCache.has(fecha)) {
+        const cached = horariosCache.get(fecha);
+        actualizarSelectHorarios(cached);
+        return;
+      }
       
       const fechaObj = new Date(fecha);
       const dia = fechaObj.getDay();
@@ -1134,22 +1208,30 @@
       }
 
       const opciones = horariosPorDia[dia] || [];
-      let optionsHTML = '<option value="" disabled selected>Selecciona una hora</option>';
+      let horariosDisponibles = [];
       
-      for (const hora of opciones) {
-        const { disponible } = await verificarDisponibilidad(fecha, hora);
-        if (disponible) {
-          optionsHTML += `<option value="${hora}" class="hora-disponible">${hora} ✔ Disponible</option>`;
-        } else {
-          optionsHTML += `<option value="${hora}" disabled class="hora-ocupada">${hora} ✖ Ocupado</option>`;
+      try {
+        // Verificar disponibilidad para cada horario
+        for (const hora of opciones) {
+          try {
+            const { disponible } = await verificarDisponibilidad(fecha, hora);
+            horariosDisponibles.push({ hora, disponible });
+          } catch (error) {
+            console.error(`Error verificando hora ${hora}:`, error);
+            horariosDisponibles.push({ hora, disponible: false, error: true });
+          }
         }
+        
+        // Guardar en cache
+        horariosCache.set(fecha, horariosDisponibles);
+        actualizarSelectHorarios(horariosDisponibles);
+        
+      } catch (error) {
+        console.error('Error cargando horarios:', error);
+        mostrarError('Error al cargar horarios. Intenta nuevamente.');
+      } finally {
+        if (cargandoHorarios) cargandoHorarios.style.display = "none";
       }
-      
-      if (selectHora) {
-        selectHora.innerHTML = optionsHTML;
-        selectHora.disabled = false;
-      }
-      if (cargandoHorarios) cargandoHorarios.style.display = "none";
     }
 
     if (fechaCitaInput && selectHora) {
