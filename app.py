@@ -27,7 +27,6 @@ from groq import Groq
 import html
 from typing import Tuple, Optional
 
-#CONFIGURACIÓN INICIAL 
 load_dotenv()
 env = Env()
 env.read_env()
@@ -35,10 +34,8 @@ env.read_env()
 app = Flask(__name__)
 app.secret_key = env.str("FLASK_SECRET_KEY")
 
-# ✅ Forzar tamaño máximo de request (1 MB)
 app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024  
 
-# ✅ Configuración de seguridad de cookies
 if os.environ.get('FLASK_ENV') == 'production':
     app.config.update(
         DEBUG=False,
@@ -50,15 +47,12 @@ if os.environ.get('FLASK_ENV') == 'production':
 else:
     app.config['DEBUG'] = True
 
-# Configuración específica para Render
 if 'RENDER' in os.environ:
     app.config['PREFERRED_URL_SCHEME'] = 'https'
     app.config['SERVER_NAME'] = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
-# Configuración de CSRF protection
 csrf = CSRFProtect(app)
 
-# Configuración de rate limiting
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -66,7 +60,6 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-# Configuración de logging
 if not os.path.exists('logs'):
     os.makedirs('logs')
 
@@ -74,7 +67,6 @@ handler = RotatingFileHandler('logs/app.log', maxBytes=10000, backupCount=3)
 handler.setLevel(logging.INFO)
 app.logger.addHandler(handler)
 
-# Log inicial para debug 
 if os.environ.get('FLASK_ENV') != 'production':
     app.logger.debug(f"Python version: {sys.version}")
     app.logger.debug(f"Current directory: {os.getcwd()}")
@@ -86,7 +78,6 @@ if not os.path.exists("conversaciones"):
 if not os.path.exists("datos"):
     os.makedirs("datos")
 
-# SISTEMA DE APRENDIZAJE 
 class SistemaAprendizaje:
     def __init__(self):
         self.respuestas_efectivas = {}  
@@ -96,7 +87,6 @@ class SistemaAprendizaje:
         self.cargar_aprendizaje()
     
     def cargar_aprendizaje(self):
-        """Carga los datos de aprendizaje desde archivo con lock"""
         try:
             with self.lock:
                 if os.path.exists(self.archivo_aprendizaje):
@@ -108,7 +98,6 @@ class SistemaAprendizaje:
             app.logger.error(f"Error cargando aprendizaje: {e}")
     
     def guardar_aprendizaje(self):
-        """Guarda los datos de aprendizaje en archivo con lock"""
         try:
             with self.lock:
                 os.makedirs(os.path.dirname(self.archivo_aprendizaje), exist_ok=True)
@@ -121,21 +110,17 @@ class SistemaAprendizaje:
             app.logger.error(f"Error guardando aprendizaje: {e}")
     
     def evaluar_respuesta(self, sintoma, respuesta_usuario, respuesta_bot, engagement):
-        """Evalúa qué tan efectiva fue la respuesta del bot"""
-        # Validar integridad de datos antes de guardar
         if not isinstance(sintoma, str) or not sintoma.strip():
             return
             
         if not isinstance(respuesta_bot, str) or not respuesta_bot.strip():
             return
             
-        # Calcular efectividad basada en engagement (longitud de respuesta, tiempo de interacción, etc.)
         efectividad = min(10, max(1, engagement))
         
         if sintoma not in self.respuestas_efectivas:
             self.respuestas_efectivas[sintoma] = {}
         
-        # Almacenar respuesta efectiva
         if respuesta_bot not in self.respuestas_efectivas[sintoma]:
             self.respuestas_efectivas[sintoma][respuesta_bot] = {
                 'efectividad_total': 0,
@@ -143,25 +128,20 @@ class SistemaAprendizaje:
                 'ultimo_uso': datetime.now().isoformat()
             }
         
-        # Actualizar estadísticas
         self.respuestas_efectivas[sintoma][respuesta_bot]['efectividad_total'] += efectividad
         self.respuestas_efectivas[sintoma][respuesta_bot]['veces_usada'] += 1
         self.respuestas_efectivas[sintoma][respuesta_bot]['ultimo_uso'] = datetime.now().isoformat()
         
-        # Guardar aprendizaje
         self.guardar_aprendizaje()
     
     def obtener_mejor_respuesta(self, sintoma, contexto):
-        """Obtiene la respuesta más efectiva para un síntoma y contexto dado"""
         if sintoma in self.respuestas_efectivas and self.respuestas_efectivas[sintoma]:
-            # Ordenar respuestas por efectividad
             respuestas_ordenadas = sorted(
                 self.respuestas_efectivas[sintoma].items(),
                 key=lambda x: x[1]['efectividad_total'] / x[1]['veces_usada'] if x[1]['veces_usada'] > 0 else 0,
                 reverse=True
             )
             
-            # Devolver la mejor respuesta (evitando repetir la misma muy seguido)
             for respuesta, stats in respuestas_ordenadas[:3]: 
                 ultimo_uso = datetime.fromisoformat(stats['ultimo_uso'])
                 if (datetime.now() - ultimo_uso).total_seconds() > 3600:
@@ -169,24 +149,13 @@ class SistemaAprendizaje:
         
         return None  
 
-# FUNCIÓN PARA GROQ API MEJORADA 
 def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
-    """
-    Envía un prompt al modelo de Groq usando el SDK oficial
-    Modelos disponibles: 
-    - openai/gpt-oss-20b
-    - openai/gpt-oss-120b (prioritario)
-    - llama-3.3-70b-versatile
-    - llama-3.1-8b-instant
-    """
     try:
-        # Validar API key
         api_key = os.getenv('GROQ_API_KEY')
         if not api_key:
             app.logger.error("GROQ_API_KEY no configurada")
             return None
             
-        # Timeout explícito para Render
         client = Groq(api_key=api_key, timeout=15)
         
         completion = client.chat.completions.create(
@@ -222,7 +191,7 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
             max_tokens=150,
             top_p=0.9,
             stream=False,
-            timeout=15  # Timeout adicional
+            timeout=15
         )
         
         return completion.choices[0].message.content.strip()
@@ -231,23 +200,17 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
         app.logger.error(f"Error al generar respuesta con Groq: {e}")
         return None
 
-# ===================== FUNCIONES DE UTILIDAD =====================
 def sanitizar_input(texto):
-    """Elimina caracteres peligrosos, escapa HTML y limita la longitud"""
     if not texto:
         return ""
-    # Escapar primero
     texto = html.escape(texto)
-    # Eliminar caracteres potencialmente peligrosos
     texto = re.sub(r'[<>{}[\]();]', '', texto)
     return texto[:500] if len(texto) > 500 else texto
 
 def validar_telefono(telefono) -> Tuple[bool, str]:
-    """Valida que el teléfono tenga el formato correcto (09xxxxxxxx)"""
     if not telefono:
-        return False, 
+        return False, "Teléfono requerido"
     
-    # Eliminar espacios y caracteres especiales
     telefono_limpio = re.sub(r'[^\d]', '', telefono)
     
     if len(telefono_limpio) != 10:
@@ -268,7 +231,6 @@ def calcular_duracion_dias(fecha_str):
         return 0
 
 def detectar_crisis(texto):
-    """Detección de crisis con expresiones regulares"""
     patrones_crisis = [
         r'suicidio', r'autolesión', r'autoflagelo', r'matarme', 
         r'no\s+quiero\s+vivir', r'acabar\s+con\s+todo', 
@@ -282,7 +244,6 @@ def detectar_crisis(texto):
             return True
     return False
 
-# ===================== DATOS DE SÍNTOMAS =====================
 sintomas_disponibles = [
     "Ansiedad", "Tristeza", "Estrés", "Soledad", "Miedo", "Culpa", "Inseguridad",
     "Enojo", "Agotamiento emocional", "Falta de motivación", "Problemas de sueño",
@@ -293,7 +254,6 @@ sintomas_disponibles = [
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
 
-# ===================== RESPUESTAS POR SÍNTOMA =====================
 respuestas_por_sintoma = {
    "Ansiedad": [
         "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
@@ -560,7 +520,7 @@ respuestas_por_sintoma = {
         "La concentración puede verse afectada por muchos factores.",
         "¿Quieres contarme cuándo notas más esta dificultad?",
         "Hablar de lo que te distrae puede ayudarte a mejorar tu foco.",
-        "Reconocer este problema es importante para buscar soluciones.",
+        "Reconocer el problema es importante para buscar soluciones.",
         "¿Sientes que tu mente está muy dispersa o cansada?",
         "¿Has probado técnicas como pausas cortas or ambientes tranquilos?",
         "El estrés y la ansiedad pueden influir en la concentración.",
@@ -629,7 +589,7 @@ respuestas_por_sintoma = {
         "¿Cuándo sueles sentir que te falta el aire?",
         "Probar respiraciones lentas y profundas puede ayudar momentáneamente.",
         "Es fundamental que consultes con un profesional de salud.",
-        "¿Sientes que la dificultad está relacionada con ansiedad o estrés?",
+        "¿Sientes que la dificultad está relacionada con ansiedad or estrés?",
         "Hablar de lo que experimentas puede ayudarte a manejarlo.",
         "¿Tienes alguien con quien puedas compartir estas sensaciones?",
         "Buscar ayuda médica es muy importante en estos casos.",
@@ -705,20 +665,19 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-# SISTEMA CONVERSACIONAL MEJORADO CON APRENDIZAJE 
+
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
         self.contador_interacciones = 0
         self.contexto_actual = None
         self.sistema_aprendizaje = SistemaAprendizaje()
-        self.engagement_actual = 5  # Valor por defecto de engagement
-        self.max_historial = 100  # Límite de mensajes en historial
+        self.engagement_actual = 5
+        self.max_historial = 100
 
     def to_dict(self):
-        """Convierte el objeto a un diccionario para serialización"""
         return {
-            'historial': self.historial[-self.max_historial:],  # Limitar historial
+            'historial': self.historial[-self.max_historial:],
             'contador_interacciones': self.contador_interacciones,
             'contexto_actual': self.contexto_actual,
             'engagement_actual': self.engagement_actual
@@ -726,7 +685,6 @@ class SistemaConversacional:
     
     @classmethod
     def from_dict(cls, data):
-        """Recrea el objeto desde un diccionario"""
         instance = cls()
         instance.historial = data.get('historial', [])
         instance.contador_interacciones = data.get('contador_interacciones', 0)
@@ -735,11 +693,9 @@ class SistemaConversacional:
         return instance
 
     def obtener_respuesta_predefinida(self, sintoma):
-        """Obtiene una respuesta predefinida para el síntoma específico"""
         if sintoma in respuestas_por_sintoma:
             return random.choice(respuestas_por_sintoma[sintoma])
         
-        # Respuestas genéricas empáticas como fallback
         respuestas_genericas = [
             "Entiendo que esto puede ser difícil de manejar. ¿Quieres contarme más sobre cómo te sientes?",
             "Aprecio que compartas esto conmigo. ¿Hay algo específico que haya desencadenado estos sentimientos?",
@@ -750,9 +706,7 @@ class SistemaConversacional:
         return random.choice(respuestas_genericas)
 
     def obtener_respuesta_ia(self, sintoma, user_input):
-        """Intenta obtener respuesta de la IA con mejor manejo de errores"""
         try:
-            # Preparar prompt contextualizado
             contexto = f"""
             El usuario está experimentando: {sintoma}. 
             Historial reciente: {str(self.historial[-2:]) if len(self.historial) > 2 else 'Primera interacción'}
@@ -761,10 +715,8 @@ class SistemaConversacional:
             Por favor, responde de manera empática y profesional.
             """
             
-            # Intentar primero con el modelo prioritario
             respuesta = generar_respuesta_llm(contexto, modelo="openai/gpt-oss-120b")
             
-            # Si falla el modelo principal, intentar con alternativos
             modelos_alternativos = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
             
             if not respuesta or len(respuesta) < 10:
@@ -773,59 +725,44 @@ class SistemaConversacional:
                     if respuesta and len(respuesta) >= 10:
                         break
             
-            # Verificar si la respuesta es válida
             if respuesta and len(respuesta) > 10:
                 return respuesta
         except Exception as e:
             app.logger.error(f"Error al obtener respuesta de IA: {e}")
         
-        # Fallback a respuesta predefinida si hay error
         return self.obtener_respuesta_predefinida(sintoma)
 
     def obtener_respuesta(self, sintoma, user_input):
-        # 1. Filtro de seguridad mejorado (suicidio, autolesión, etc.)
         if detectar_crisis(user_input):
             return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 o con tu psicólogo de confianza."
 
-        # 2. Verificar si el usuario solicita cita explícitamente
         palabras_cita = ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]
         input_lower = user_input.lower()
         if any(palabra in input_lower for palabra in palabras_cita):
             return "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?"
 
-        # 3. Intentar con respuesta aprendida primero
         respuesta_aprendida = self.sistema_aprendizaje.obtener_mejor_respuesta(sintoma, user_input)
         if respuesta_aprendida:
             app.logger.info(f"Usando respuesta aprendida para {sintoma}")
             self.contador_interacciones += 1
             return respuesta_aprendida
 
-        # 4. Si no hay respuesta aprendida, usar IA
         respuesta_ia = self.obtener_respuesta_ia(sintoma, user_input)
-        self.contador_interaccions += 1
+        self.contador_interacciones += 1
         
-        # 5. Aprender de esta interacción
         self.aprender_de_interaccion(sintoma, user_input, respuesta_ia)
         
-        # 6. Si después de algunas interacciones, sugerir cita suavemente
         if self.contador_interacciones >= 3 and not any(palabra in respuesta_ia.lower() for palabra in palabras_cita):
             respuesta_ia += " ¿Has considerado la posibilidad de hablar con un psicólogo profesional? Podría ofrecerte un apoyo más personalizado."
         
         return respuesta_ia
 
     def aprender_de_interaccion(self, sintoma, user_input, respuesta_bot):
-        """Aprende de la interacción actual"""
-        # Calcular engagement basado en longitud de respuesta del usuario
-        engagement = min(10, len(user_input) / 10)  # Más largo = más engagement
-        
-        # Añadir al sistema de aprendizaje
+        engagement = min(10, len(user_input) / 10)
         self.sistema_aprendizaje.evaluar_respuesta(sintoma, user_input, respuesta_bot, engagement)
-        
-        # Aprender patrones de conversación
         self.aprender_patrones(user_input, respuesta_bot)
 
     def aprender_patrones(self, user_input, respuesta_bot):
-        """Aprende patrones de conversación comunes"""
         palabras_usuario = set(user_input.lower().split())
         palabras_bot = set(respuesta_bot.lower().split())
         
@@ -841,7 +778,6 @@ class SistemaConversacional:
         self.sistema_aprendizaje.guardar_aprendizaje()
 
     def agregar_interaccion(self, tipo, mensaje, sintoma=None):
-        # Limitar tamaño del historial
         if len(self.historial) >= self.max_historial:
             self.historial.pop(0)
             
@@ -853,24 +789,18 @@ class SistemaConversacional:
         }
         self.historial.append(interaccion)
         
-        # Si es una respuesta del usuario, actualizar engagement
         if tipo == 'user' and len(self.historial) > 1:
             ultima_respuesta_bot = self.historial[-2] if self.historial[-2]['tipo'] == 'bot' else None
             if ultima_respuesta_bot:
-                # Calcular engagement basado en longitud de respuesta
                 self.engagement_actual = min(10, len(mensaje) / 15)
-                
-                # Aprender de esta interacción
                 self.aprender_de_interaccion(
                     ultima_respuesta_bot['sintoma'] or "general",
                     mensaje,
                     ultima_respuesta_bot['mensaje']
                 )
 
-# FUNCIONES DE CALENDARIO 
 def get_calendar_service():
     try:
-        # Validar que las credenciales existan
         if 'GOOGLE_CREDENTIALS' not in os.environ:
             app.logger.error("GOOGLE_CREDENTIALS no configuradas")
             return None
@@ -887,7 +817,6 @@ def get_calendar_service():
 
 def crear_evento_calendar(fecha, hora, telefono, sintoma):
     try:
-        # Validar formato de fecha y hora
         datetime.strptime(fecha, "%Y-%m-%d")
         datetime.strptime(hora, "%H:%M")
         
@@ -923,7 +852,6 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
         app.logger.error(f"Error inesperado al crear evento: {e}")
         return None
 
-# FUNCIÓN DE CORREO 
 def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
     remitente = os.getenv("EMAIL_USER")
     password = os.getenv("EMAIL_PASSWORD")
@@ -958,15 +886,11 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
         app.logger.error(f"Error enviando correo: {e}")
         return False
 
-# LIMPIADOR AUTOMÁTICO DE DATOS 
 def limpiar_datos_aprendizaje():
-    """Limpia periódicamente datos de aprendizaje antiguos o poco útiles"""
     try:
-        # Esta función se ejecutará en un hilo separado
         while True:
-            time.sleep(24 * 60 * 60)  # 24 horas
+            time.sleep(24 * 60 * 60)
             
-            # Verificar si hay datos que limpiar
             sistema_aprendizaje = SistemaAprendizaje()
             if not sistema_aprendizaje.respuestas_efectivas:
                 continue
@@ -976,10 +900,8 @@ def limpiar_datos_aprendizaje():
                     stats = sistema_aprendizaje.respuestas_efectivas[sintoma][respuesta]
                     ultimo_uso = datetime.fromisoformat(stats['ultimo_uso'])
                     
-                    # Eliminar respuestas muy antiguas o poco efectivas
                     if (datetime.now() - ultimo_uso).days > 30 or stats['veces_usada'] < 2:
                         del sistema_aprendizaje.respuestas_efectivas[sintoma][respuesta]
-                
                 
                 if not sistema_aprendizaje.respuestas_efectivas[sintoma]:
                     del sistema_aprendizaje.respuestas_efectivas[sintoma]
@@ -994,11 +916,9 @@ if os.environ.get('FLASK_ENV') == 'production':
     hilo_limpieza = threading.Thread(target=limpiar_datos_aprendizaje, daemon=True)
     hilo_limpieza.start()
 
-# RUTAS PRINCIPALES 
 @app.route("/", methods=["GET", "POST"])
-@limiter.limit("15 per minute")  # Más restrictivo para conversaciones
+@limiter.limit("15 per minute")
 def index():
-    # ✅ Asegurar que fechas_validas siempre exista en la sesión
     if "fechas_validas" not in session:
         session["fechas_validas"] = {
             'hoy': datetime.now().strftime('%Y-%m-%d'),
@@ -1008,7 +928,6 @@ def index():
             'max_sintoma': datetime.now().strftime('%Y-%m-%d')
         }
 
-    # ✅ Inicializar o recuperar la conversación
     if "conversacion_data" not in session:
         conversacion = SistemaConversacional()
         session.update({
@@ -1017,7 +936,6 @@ def index():
             "conversacion_data": conversacion.to_dict()
         })
     else:
-        # Recuperar la conversación desde el diccionario
         conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
 
     if request.method == "POST":
@@ -1052,7 +970,6 @@ def index():
             if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                # Verificar si el usuario solicita cita explícitamente
                 if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]):
                     session["estado"] = "derivacion"
                     conversacion.agregar_interaccion('bot', "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial?", session["sintoma_actual"])
@@ -1084,7 +1001,6 @@ def index():
             elif fecha := request.form.get("fecha_cita"):
                 telefono = request.form.get("telefono", "").strip()
 
-                # Validar teléfono con mensaje específico
                 valido, mensaje_error = validar_telefono(telefono)
                 if not valido:
                     conversacion.agregar_interaccion('bot', f"⚠️ {mensaje_error}. Por favor, ingrésalo de nuevo.", None)
@@ -1143,7 +1059,6 @@ def index():
         fechas_validas=session["fechas_validas"]
     )
 
-# ===================== RUTA RESET =====================
 @app.route("/reset", methods=["POST"])
 def reset():
     try:
@@ -1166,10 +1081,8 @@ def reset():
         app.logger.error(f"Error al reiniciar sesión: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# RUTA PARA CANCELAR CITA 
 @app.route("/cancelar_cita", methods=["POST"])
 def cancelar_cita():
-    """Nueva ruta para manejar la cancelación de citas de manera explícita"""
     try:
         if "conversacion_data" in session:
             conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
@@ -1182,11 +1095,9 @@ def cancelar_cita():
         app.logger.error(f"Error al cancelar cita: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# RUTAS DE MONITOREO DE APRENDIZAJE 
 @app.route("/admin/aprendizaje")
 @limiter.limit("10 per minute")
 def monitoreo_aprendizaje():
-    """Endpoint para monitorear el estado del aprendizaje del bot"""
     if "conversacion_data" not in session:
         return jsonify({"error": "No hay sesión activa"}), 400
     
@@ -1202,7 +1113,6 @@ def monitoreo_aprendizaje():
 @app.route("/admin/reiniciar-aprendizaje", methods=["POST"])
 @limiter.limit("5 per minute")
 def reiniciar_aprendizaje():
-    """Reinicia el sistema de aprendizaje (solo para desarrollo)"""
     if os.environ.get('FLASK_ENV') == 'production':
         return jsonify({"error": "No disponible en producción"}), 403
     
@@ -1213,7 +1123,6 @@ def reiniciar_aprendizaje():
     
     return jsonify({"status": "Aprendizaje reiniciado"})
 
-# ===================== RUTAS ADICIONALES =====================
 @app.route("/verificar-horario", methods=["POST"])
 @limiter.limit("30 per minute")  
 def verificar_horario():
@@ -1240,7 +1149,6 @@ def verificar_horario():
         app.logger.error(f"Error inesperado al verificar horario: {e}")
         return jsonify({"error": "Error interno del servidor"}), 500
 
-#Ruta de health check
 @app.route('/health')
 def health_check():
     try:
@@ -1273,7 +1181,6 @@ def internal_error(error):
 def not_found(error):
     return jsonify({"error": "Endpoint no encontrado"}), 404
 
-# ===================== CONFIGURACIÓN PARA RENDER =====================
 if __name__ == "__main__":
     if os.environ.get('FLASK_ENV') == 'production':
         required_env_vars = ["FLASK_SECRET_KEY", "EMAIL_USER", "EMAIL_PASSWORD", "PSICOLOGO_EMAIL", "GOOGLE_CREDENTIALS", "GROQ_API_KEY"]
@@ -1283,18 +1190,15 @@ if __name__ == "__main__":
             app.logger.error(f"ERROR: Variables de entorno faltantes en producción: {missing_vars}")
             exit(1)
     
-    # Inicializar directorios necesarios
     for directory in ["logs", "conversaciones", "datos"]:
         if not os.path.exists(directory):
             os.makedirs(directory)
     
-    # Usar el puerto que Render proporciona
     port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get('FLASK_ENV') != 'production'
     
     app.logger.info(f"Iniciando aplicación Equilibra en puerto {port}")
     
-    # En producción, usar Waitress como servidor WSGI
     if os.environ.get('FLASK_ENV') == 'production':
         from waitress import serve
         serve(app, host='0.0.0.0', port=port)
