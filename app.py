@@ -1062,7 +1062,7 @@ def index():
                 
                 session["estado"] = "agendar_cita"
                 mensaje = (
-                    "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
+                    "Excelente decisión. Por favor completa los datos para tu cita:\n\n"
                     "📅 Selecciona una fecha disponible\n"
                     "⏰ Elige un horario que te convenga\n"
                     "📱 Ingresa tu número de teléfono para contactarte"
