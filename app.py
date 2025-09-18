@@ -738,20 +738,26 @@ class SistemaConversacional:
 
         palabras_cita = ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]
         input_lower = user_input.lower()
+        
+        # Si el usuario solicita cita explícitamente
         if any(palabra in input_lower for palabra in palabras_cita):
             return "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?"
 
+        # Intentar con respuesta aprendida primero
         respuesta_aprendida = self.sistema_aprendizaje.obtener_mejor_respuesta(sintoma, user_input)
         if respuesta_aprendida:
             app.logger.info(f"Usando respuesta aprendida para {sintoma}")
             self.contador_interacciones += 1
             return respuesta_aprendida
 
+        # Si no hay respuesta aprendida, usar IA
         respuesta_ia = self.obtener_respuesta_ia(sintoma, user_input)
         self.contador_interacciones += 1
         
+        # Aprender de esta interacción
         self.aprender_de_interaccion(sintoma, user_input, respuesta_ia)
         
+        # Si después de algunas interacciones, sugerir cita suavemente
         if self.contador_interacciones >= 3 and not any(palabra in respuesta_ia.lower() for palabra in palabras_cita):
             respuesta_ia += " ¿Has considerado la posibilidad de hablar con un psicólogo profesional? Podría ofrecerte un apoyo más personalizado."
         
@@ -966,85 +972,93 @@ def index():
                 respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], "")
                 conversacion.agregar_interaccion('bot', f"{comentario} {respuesta}", session["sintoma_actual"])
 
-        elif estado_actual == "profundizacion" or estado_actual == "derivacion":
-            if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
+        elif estado_actual in ["profundizacion", "derivacion"]:
+            user_input = sanitizar_input(request.form.get("user_input", "").strip())
+            solicitar_cita = request.form.get("solicitar_cita") == "true"
+            
+            if solicitar_cita:
+                # El usuario hizo clic en el botón de solicitar cita
+                session["estado"] = "derivacion"
+                conversacion.agregar_interaccion('user', "Quiero agendar una cita", session["sintoma_actual"])
+                conversacion.agregar_interaccion('bot', "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?", session["sintoma_actual"])
+            elif user_input:
+                # El usuario envió un mensaje de texto
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]):
+                if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar", "sí", "si", "quiero"]):
                     session["estado"] = "derivacion"
-                    conversacion.agregar_interaccion('bot', "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial?", session["sintoma_actual"])
+                    conversacion.agregar_interaccion('bot', "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?", session["sintoma_actual"])
                 else:
                     respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
                     conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
 
         elif estado_actual == "derivacion":
-            if user_input := sanitizar_input(request.form.get("user_input", "").strip()):
-                conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
-                if any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale", "por favor"]):
-                    session["estado"] = "agendar_cita"
-                    mensaje = (
-                        "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
-                        "📅 Selecciona una fecha disponible\n"
-                        "⏰ Elige un horario que te convenga\n"
-                        "📱 Ingresa tu número de teléfono para contactarte"
-                    )
-                    conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
-                else:
-                    session["estado"] = "profundizacion"
-                    respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
-                    conversacion.agregar_interaccion('bot', f"Entendido, continuemos conversando. {respuesta}", session["sintoma_actual"])
+            user_input = sanitizar_input(request.form.get("user_input", "").strip())
+            solicitar_cita = request.form.get("solicitar_cita") == "true"
+            
+            if solicitar_cita or (user_input and any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale", "por favor"])):
+                session["estado"] = "agendar_cita"
+                mensaje = (
+                    "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
+                    "📅 Selecciona una fecha disponible\n"
+                    "⏰ Elige un horario que te convenga\n"
+                    "📱 Ingresa tu número de teléfono para contactarte"
+                )
+                conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
+            elif user_input:
+                session["estado"] = "profundizacion"
+                respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
+                conversacion.agregar_interaccion('bot', f"Entendido, continuemos conversando. {respuesta}", session["sintoma_actual"])
 
         elif estado_actual == "agendar_cita":
-            if "cancelar_cita" in request.form:
+            if request.form.get("cancelar_cita"):
                 session["estado"] = "profundizacion"
                 conversacion.agregar_interaccion('bot', "Entendido, no hay problema. ¿Hay algo más en lo que pueda ayudarte hoy?", session["sintoma_actual"])
-            elif fecha := request.form.get("fecha_cita"):
+            else:
+                fecha = request.form.get("fecha_cita")
                 telefono = request.form.get("telefono", "").strip()
+                hora = request.form.get("hora_cita")
 
-                valido, mensaje_error = validar_telefono(telefono)
-                if not valido:
-                    conversacion.agregar_interaccion('bot', f"⚠️ {mensaje_error}. Por favor, ingrésalo de nuevo.", None)
-                    session["conversacion_data"] = conversacion.to_dict()
-                    return redirect(url_for("index"))
+                if fecha and telefono and hora:
+                    valido, mensaje_error = validar_telefono(telefono)
+                    if not valido:
+                        conversacion.agregar_interaccion('bot', f"⚠️ {mensaje_error}. Por favor, ingrésalo de nuevo.", None)
+                    else:
+                        cita = {
+                            "fecha": fecha,
+                            "hora": hora,
+                            "telefono": telefono
+                        }
 
-                cita = {
-                    "fecha": fecha,
-                    "hora": request.form.get("hora_cita"),
-                    "telefono": telefono
-                }
-
-                if not cita["hora"]:
-                    conversacion.agregar_interaccion('bot', "⚠️ Selecciona una hora válida", None)
-                else:
-                    evento_url = crear_evento_calendar(
-                        cita["fecha"],
-                        cita["hora"],
-                        cita["telefono"],
-                        session["sintoma_actual"]
-                    )
-
-                    if evento_url:
-                        if enviar_correo_confirmacion(
-                            os.getenv("PSICOLOGO_EMAIL"),
+                        evento_url = crear_evento_calendar(
                             cita["fecha"],
                             cita["hora"],
                             cita["telefono"],
                             session["sintoma_actual"]
-                        ):
-                            mensaje = (
-                                f"✅ Cita confirmada para {cita['fecha']} a las {cita['hora']}. " 
-                                "Recibirás una llamada para coordinar tu consulta. " 
-                                "¡Gracias por confiar en nosotros!"
-                            )
-                        else:
-                            mensaje = "✅ Cita registrada (pero error al notificar al profesional)"
+                        )
 
-                        conversacion.agregar_interaccion('bot', mensaje, None)
-                        session["estado"] = "fin"
-                        app.logger.info(f"Cita agendada exitosamente: {cita}")
-                    else:
-                        conversacion.agregar_interaccion('bot', "❌ Error al agendar. Intenta nuevamente", None)
-                        app.logger.error(f"Error al agendar cita: {cita}")
+                        if evento_url:
+                            if enviar_correo_confirmacion(
+                                os.getenv("PSICOLOGO_EMAIL"),
+                                cita["fecha"],
+                                cita["hora"],
+                                cita["telefono"],
+                                session["sintoma_actual"]
+                            ):
+                                mensaje = (
+                                    f"✅ Cita confirmada para {cita['fecha']} a las {cita['hora']}. " 
+                                    "Recibirás una llamada para coordinar tu consulta. " 
+                                    "¡Gracias por confiar en nosotros!"
+                                )
+                            else:
+                                mensaje = "✅ Cita registrada (pero error al notificar al profesional)"
+
+                            conversacion.agregar_interaccion('bot', mensaje, None)
+                            session["estado"] = "fin"
+                            app.logger.info(f"Cita agendada exitosamente: {cita}")
+                        else:
+                            conversacion.agregar_interaccion('bot', "❌ Error al agendar. Intenta nuevamente", None)
+                            app.logger.error(f"Error al agendar cita: {cita}")
 
         session["conversacion_data"] = conversacion.to_dict()
         return redirect(url_for("index"))
@@ -1094,34 +1108,6 @@ def cancelar_cita():
     except Exception as e:
         app.logger.error(f"Error al cancelar cita: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route("/admin/aprendizaje")
-@limiter.limit("10 per minute")
-def monitoreo_aprendizaje():
-    if "conversacion_data" not in session:
-        return jsonify({"error": "No hay sesión activa"}), 400
-    
-    conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
-    
-    return jsonify({
-        "total_respuestas_aprendidas": sum(len(v) for v in conversacion.sistema_aprendizaje.respuestas_efectivas.values()),
-        "sintomas_aprendidos": list(conversacion.sistema_aprendizaje.respuestas_efectivas.keys()),
-        "patrones_detectados": len(conversacion.sistema_aprendizaje.patrones_conversacion),
-        "engagement_actual": conversacion.engagement_actual
-    })
-
-@app.route("/admin/reiniciar-aprendizaje", methods=["POST"])
-@limiter.limit("5 per minute")
-def reiniciar_aprendizaje():
-    if os.environ.get('FLASK_ENV') == 'production':
-        return jsonify({"error": "No disponible en producción"}), 403
-    
-    if "conversacion_data" in session:
-        conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
-        conversacion.sistema_aprendizaje = SistemaAprendizaje()  
-        session["conversacion_data"] = conversacion.to_dict()
-    
-    return jsonify({"status": "Aprendizaje reiniciado"})
 
 @app.route("/verificar-horario", methods=["POST"])
 @limiter.limit("30 per minute")  
