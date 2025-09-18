@@ -843,6 +843,9 @@
       </div>
       <form method="POST" action="/" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <!-- CAMPO OCULTO AGREGADO PARA SOLICITAR CITA -->
+        <input type="hidden" name="solicitar_cita" id="solicitarCitaHidden" value="false">
+        
         <textarea name="user_input" placeholder="Escribe tu respuesta aquí..." rows="3" required aria-label="Escribe tu respuesta"></textarea>
         <div class="form-row">
           <input type="submit" value="Enviar ✉️" aria-label="Enviar mensaje" />
@@ -985,34 +988,15 @@
       return div.innerHTML;
     }
 
+    // FUNCIÓN ACTUALIZADA PARA SOLICITAR CITA
     function solicitarCita() {
       mostrarEscribiendo();
       
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = '/';
+      // Establecer el valor del campo oculto a "true"
+      document.getElementById('solicitarCitaHidden').value = "true";
       
-      const csrfToken = document.createElement('input');
-      csrfToken.type = 'hidden';
-      csrfToken.name = 'csrf_token';
-      csrfToken.value = '{{ csrf_token() }}';
-      
-      const userInput = document.createElement('input');
-      userInput.type = 'hidden';
-      userInput.name = 'user_input';
-      userInput.value = 'Quiero agendar una cita';
-      
-      const solicitarCita = document.createElement('input');
-      solicitarCita.type = 'hidden';
-      solicitarCita.name = 'solicitar_cita';
-      solicitarCita.value = 'true';
-      
-      form.appendChild(csrfToken);
-      form.appendChild(userInput);
-      form.appendChild(solicitarCita);
-      
-      document.body.appendChild(form);
-      form.submit();
+      // Enviar el formulario
+      document.querySelector('form').submit();
     }
 
     // REINICIAR CHAT 

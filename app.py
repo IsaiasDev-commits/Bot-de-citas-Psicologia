@@ -53,20 +53,22 @@ if 'RENDER' in os.environ:
 
 csrf = CSRFProtect(app)
 
-# Rate limiting principal
+# Rate limiting principal - más permisivo
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["1000 per day", "200 per hour"],
-    storage_uri="memory://"
+    default_limits=["2000 per day", "500 per hour"],
+    storage_uri="memory://",
+    strategy="fixed-window"  # Estrategia más simple
 )
 
-# Rate limiting específico para citas
+# Rate limiting específico para citas - más permisivo
 cita_limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["50 per hour", "10 per minute"],
-    storage_uri="memory://"
+    default_limits=["100 per hour", "30 per minute"],
+    storage_uri="memory://",
+    strategy="fixed-window"
 )
 
 if not os.path.exists('logs'):
@@ -75,6 +77,10 @@ if not os.path.exists('logs'):
 handler = RotatingFileHandler('logs/app.log', maxBytes=10000, backupCount=3)
 handler.setLevel(logging.INFO)
 app.logger.addHandler(handler)
+
+# Configurar logging más detallado
+logging.basicConfig(level=logging.INFO)
+app.logger.setLevel(logging.INFO)
 
 if os.environ.get('FLASK_ENV') != 'production':
     app.logger.debug(f"Python version: {sys.version}")
@@ -86,6 +92,10 @@ if not os.path.exists("conversaciones"):
 
 if not os.path.exists("datos"):
     os.makedirs("datos")
+
+# Cache para horarios verificados
+horarios_cache = {}
+cache_lock = threading.Lock()
 
 class SistemaAprendizaje:
     def __init__(self):
@@ -114,7 +124,7 @@ class SistemaAprendizaje:
                     json.dump({
                         'respuestas_efectivas': self.respuestas_efectivas,
                         'patrones_conversacion': self.patrones_conversacion
-                    }, f, ensure_ascii=False, indent=2)
+                    }, f, ensure_asci=False, indent=2)
         except Exception as e:
             app.logger.error(f"Error guardando aprendizaje: {e}")
     
@@ -173,7 +183,7 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
                 {
                     "role": "system",
                     "content": """Eres Equilibra, un asistente psicológico empático y profesional. 
-                    Tu objetivo es ayudar a las personas a reflexionar sobre sus emociones y, 
+                    Tu objetivo es ayudar a las personas to reflexionar sobre sus emociones y, 
                     cuando sea apropiado, sugerir una cita con un psicólogo profesional.
                     
                     DIRECTRICES:
@@ -263,8 +273,9 @@ sintomas_disponibles = [
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
 
+# Respuestas por síntoma (resumidas para brevedad)
 respuestas_por_sintoma = {
-   "Ansiedad": [
+     "Ansiedad": [
         "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
         "Cuando sientes ansiedad, ¿qué técnicas has probado para calmarte?",
         "¿Notas que la ansiedad afecta tu cuerpo (ej. taquicardia, sudoración)?",
@@ -927,12 +938,34 @@ def limpiar_datos_aprendizaje():
     except Exception as e:
         app.logger.error(f"Error limpiando datos de aprendizaje: {e}")
 
+# Limpiar cache de horarios periódicamente
+def limpiar_cache_horarios():
+    try:
+        while True:
+            time.sleep(3600)  # Limpiar cada hora
+            with cache_lock:
+                now = time.time()
+                keys_to_delete = []
+                for key, (timestamp, _) in horarios_cache.items():
+                    if now - timestamp > 1800:  # 30 minutos
+                        keys_to_delete.append(key)
+                
+                for key in keys_to_delete:
+                    del horarios_cache[key]
+                
+                app.logger.info(f"Cache de horarios limpiado. Eliminadas {len(keys_to_delete)} entradas.")
+    except Exception as e:
+        app.logger.error(f"Error limpiando cache de horarios: {e}")
+
 if os.environ.get('FLASK_ENV') == 'production':
     hilo_limpieza = threading.Thread(target=limpiar_datos_aprendizaje, daemon=True)
     hilo_limpieza.start()
+    
+    hilo_limpieza_cache = threading.Thread(target=limpiar_cache_horarios, daemon=True)
+    hilo_limpieza_cache.start()
 
 @app.route("/", methods=["GET", "POST"])
-@limiter.limit("15 per minute")
+@limiter.limit("500 per hour")
 def index():
     if "fechas_validas" not in session:
         session["fechas_validas"] = {
@@ -955,6 +988,9 @@ def index():
 
     if request.method == "POST":
         estado_actual = session["estado"]
+        
+        # Logging para depuración
+        app.logger.info(f"Estado actual: {estado_actual}, datos del formulario: {dict(request.form)}")
 
         if estado_actual == "inicio":
             if sintomas := request.form.getlist("sintomas"):
@@ -983,13 +1019,15 @@ def index():
 
         elif estado_actual in ["profundizacion", "derivacion"]:
             user_input = sanitizar_input(request.form.get("user_input", "").strip())
-            solicitar_cita = request.form.get("solicitar_cita") == "true"
+            solicitar_cita = request.form.get("solicitar_cita")
             
-            if solicitar_cita:
+            # CORRECCIÓN: Comparación corregida con lowercase
+            if solicitar_cita and solicitar_cita.lower() == "true":
                 # El usuario hizo clic en el botón de solicitar cita
                 session["estado"] = "derivacion"
                 conversacion.agregar_interaccion('user', "Quiero agendar una cita", session["sintoma_actual"])
                 conversacion.agregar_interaccion('bot', "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?", session["sintoma_actual"])
+                app.logger.info("Usuario solicitó cita mediante botón")
             elif user_input:
                 # El usuario envió un mensaje de texto
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
@@ -997,15 +1035,17 @@ def index():
                 if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar", "sí", "si", "quiero"]):
                     session["estado"] = "derivacion"
                     conversacion.agregar_interaccion('bot', "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?", session["sintoma_actual"])
+                    app.logger.info("Usuario solicitó cita mediante mensaje de texto")
                 else:
                     respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
                     conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
 
         elif estado_actual == "derivacion":
             user_input = sanitizar_input(request.form.get("user_input", "").strip())
-            solicitar_cita = request.form.get("solicitar_cita") == "true"
+            solicitar_cita = request.form.get("solicitar_cita")
             
-            if solicitar_cita or (user_input and any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale", "por favor"])):
+            # CORRECCIÓN: Comparación corregida con lowercase
+            if (solicitar_cita and solicitar_cita.lower() == "true") or (user_input and any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale", "por favor"])):
                 session["estado"] = "agendar_cita"
                 mensaje = (
                     "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
@@ -1014,6 +1054,7 @@ def index():
                     "📱 Ingresa tu número de teléfono para contactarte"
                 )
                 conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
+                app.logger.info("Usuario confirmó agendar cita")
             elif user_input:
                 session["estado"] = "profundizacion"
                 respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
@@ -1023,6 +1064,7 @@ def index():
             if request.form.get("cancelar_cita"):
                 session["estado"] = "profundizacion"
                 conversacion.agregar_interaccion('bot', "Entendido, no hay problema. ¿Hay algo más en lo que pueda ayudarte hoy?", session["sintoma_actual"])
+                app.logger.info("Usuario canceló proceso de cita")
             else:
                 fecha = request.form.get("fecha_cita")
                 telefono = request.form.get("telefono", "").strip()
@@ -1032,6 +1074,7 @@ def index():
                     valido, mensaje_error = validar_telefono(telefono)
                     if not valido:
                         conversacion.agregar_interaccion('bot', f"⚠️ {mensaje_error}. Por favor, ingrésalo de nuevo.", None)
+                        app.logger.warning(f"Teléfono inválido: {telefono}")
                     else:
                         cita = {
                             "fecha": fecha,
@@ -1083,6 +1126,7 @@ def index():
     )
 
 @app.route("/reset", methods=["POST"])
+@limiter.limit("50 per hour")
 def reset():
     try:
         session.clear()
@@ -1105,6 +1149,7 @@ def reset():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/cancelar_cita", methods=["POST"])
+@limiter.limit("50 per hour")
 def cancelar_cita():
     try:
         if "conversacion_data" in session:
@@ -1119,13 +1164,25 @@ def cancelar_cita():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/verificar-horario", methods=["POST"])
-@cita_limiter.limit("30 per minute")
+@cita_limiter.limit("60 per minute")
 def verificar_horario():
     try:
         data = request.get_json()
         if not data or 'fecha' not in data or 'hora' not in data:
             return jsonify({"error": "Datos incompletos"}), 400
-            
+        
+        # Verificar cache primero
+        cache_key = f"{data['fecha']}_{data['hora']}"
+        current_time = time.time()
+        
+        with cache_lock:
+            if cache_key in horarios_cache:
+                cache_time, cached_result = horarios_cache[cache_key]
+                # Usar cache si tiene menos de 5 minutos
+                if current_time - cache_time < 300:
+                    app.logger.info(f"Usando cache para {cache_key}")
+                    return jsonify(cached_result)
+        
         service = get_calendar_service()
         if not service:
             return jsonify({"error": "Servicio de calendario no disponible"}), 500
@@ -1134,18 +1191,27 @@ def verificar_horario():
             calendarId='primary',
             timeMin=f"{data['fecha']}T{data['hora']}:00-05:00",
             timeMax=f"{data['fecha']}T{int(data['hora'].split(':')[0])+1}:00:00-05:00",
-            singleEvents=True
+            singleEvents=True,
+            maxResults=1  # Solo necesitamos saber si hay eventos
         ).execute()
-        return jsonify({"disponible": len(eventos.get('items', [])) == 0})
+        
+        disponible = len(eventos.get('items', [])) == 0
+        
+        # Guardar en cache
+        with cache_lock:
+            horarios_cache[cache_key] = (current_time, {"disponible": disponible})
+        
+        return jsonify({"disponible": disponible})
+        
     except HttpError as error:
         app.logger.error(f"Error de Google API: {error}")
-        return jsonify({"error": str(error)}), 500
+        return jsonify({"error": "Error de calendario"}), 500
     except Exception as e:
         app.logger.error(f"Error inesperado al verificar horario: {e}")
         return jsonify({"error": "Error interno del servidor"}), 500
 
 @app.route("/agendar-cita", methods=["POST"])
-@cita_limiter.limit("20 per minute")
+@cita_limiter.limit("40 per minute")
 def agendar_cita():
     try:
         data = request.get_json()
