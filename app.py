@@ -27,7 +27,7 @@ from groq import Groq
 import html
 from typing import Tuple, Optional
 
-# ===================== CONFIGURACIÓN INICIAL =====================
+#CONFIGURACIÓN INICIAL 
 load_dotenv()
 env = Env()
 env.read_env()
@@ -50,6 +50,11 @@ if os.environ.get('FLASK_ENV') == 'production':
 else:
     app.config['DEBUG'] = True
 
+# Configuración específica para Render
+if 'RENDER' in os.environ:
+    app.config['PREFERRED_URL_SCHEME'] = 'https'
+    app.config['SERVER_NAME'] = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+
 # Configuración de CSRF protection
 csrf = CSRFProtect(app)
 
@@ -69,7 +74,7 @@ handler = RotatingFileHandler('logs/app.log', maxBytes=10000, backupCount=3)
 handler.setLevel(logging.INFO)
 app.logger.addHandler(handler)
 
-# Log inicial para debug (solo en desarrollo)
+# Log inicial para debug 
 if os.environ.get('FLASK_ENV') != 'production':
     app.logger.debug(f"Python version: {sys.version}")
     app.logger.debug(f"Current directory: {os.getcwd()}")
@@ -81,13 +86,13 @@ if not os.path.exists("conversaciones"):
 if not os.path.exists("datos"):
     os.makedirs("datos")
 
-# ===================== SISTEMA DE APRENDIZAJE =====================
+# SISTEMA DE APRENDIZAJE 
 class SistemaAprendizaje:
     def __init__(self):
-        self.respuestas_efectivas = {}  # Almacena respuestas que han funcionado bien
-        self.patrones_conversacion = {}  # Aprende patrones de conversación
+        self.respuestas_efectivas = {}  
+        self.patrones_conversacion = {}  
         self.archivo_aprendizaje = "datos/aprendizaje.json"
-        self.lock = threading.Lock()  # Lock para concurrencia
+        self.lock = threading.Lock()  
         self.cargar_aprendizaje()
     
     def cargar_aprendizaje(self):
@@ -157,14 +162,14 @@ class SistemaAprendizaje:
             )
             
             # Devolver la mejor respuesta (evitando repetir la misma muy seguido)
-            for respuesta, stats in respuestas_ordenadas[:3]:  # Top 3
+            for respuesta, stats in respuestas_ordenadas[:3]: 
                 ultimo_uso = datetime.fromisoformat(stats['ultimo_uso'])
-                if (datetime.now() - ultimo_uso).total_seconds() > 3600:  # No repetir en 1 hora
+                if (datetime.now() - ultimo_uso).total_seconds() > 3600:
                     return respuesta
         
-        return None  # Dejar que la IA genere una nueva respuesta
+        return None  
 
-# ===================== FUNCIÓN PARA GROQ API MEJORADA =====================
+# FUNCIÓN PARA GROQ API MEJORADA 
 def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
     """
     Envía un prompt al modelo de Groq usando el SDK oficial
@@ -181,8 +186,8 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
             app.logger.error("GROQ_API_KEY no configurada")
             return None
             
-        # Usar el SDK oficial de Groq
-        client = Groq(api_key=api_key)
+        # Timeout explícito para Render
+        client = Groq(api_key=api_key, timeout=15)
         
         completion = client.chat.completions.create(
             model=modelo,
@@ -216,13 +221,14 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
             temperature=0.7,
             max_tokens=150,
             top_p=0.9,
-            stream=False
+            stream=False,
+            timeout=15  # Timeout adicional
         )
         
         return completion.choices[0].message.content.strip()
     
     except Exception as e:
-        app.logger.error(f"Error al generar respuesta con Groq SDK: {e}")
+        app.logger.error(f"Error al generar respuesta con Groq: {e}")
         return None
 
 # ===================== FUNCIONES DE UTILIDAD =====================
@@ -239,7 +245,7 @@ def sanitizar_input(texto):
 def validar_telefono(telefono) -> Tuple[bool, str]:
     """Valida que el teléfono tenga el formato correcto (09xxxxxxxx)"""
     if not telefono:
-        return False, "El teléfono no puede estar vacío"
+        return False, 
     
     # Eliminar espacios y caracteres especiales
     telefono_limpio = re.sub(r'[^\d]', '', telefono)
@@ -262,9 +268,9 @@ def calcular_duracion_dias(fecha_str):
         return 0
 
 def detectar_crisis(texto):
-    """Detección mejorada de crisis con expresiones regulares"""
+    """Detección de crisis con expresiones regulares"""
     patrones_crisis = [
-        r'suicid', r'autolesión', r'autoflagelo', r'matarme', 
+        r'suicidio', r'autolesión', r'autoflagelo', r'matarme', 
         r'no\s+quiero\s+vivir', r'acabar\s+con\s+todo', 
         r'no\s+vale\s+la\s+pena', r'sin\s+esperanza', 
         r'quiero\s+morir', r'terminar\s+con\s+todo'
@@ -289,7 +295,7 @@ sintomas_disponibles = [
 
 # ===================== RESPUESTAS POR SÍNTOMA =====================
 respuestas_por_sintoma = {
-    "Ansiedad": [
+   "Ansiedad": [
         "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
         "Cuando sientes ansiedad, ¿qué técnicas has probado para calmarte?",
         "¿Notas que la ansiedad afecta tu cuerpo (ej. taquicardia, sudoración)?",
@@ -699,7 +705,7 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-# ===================== SISTEMA CONVERSACIONAL MEJORADO CON APRENDIZAJE =====================
+# SISTEMA CONVERSACIONAL MEJORADO CON APRENDIZAJE 
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
@@ -796,7 +802,7 @@ class SistemaConversacional:
 
         # 4. Si no hay respuesta aprendida, usar IA
         respuesta_ia = self.obtener_respuesta_ia(sintoma, user_input)
-        self.contador_interacciones += 1
+        self.contador_interaccions += 1
         
         # 5. Aprender de esta interacción
         self.aprender_de_interaccion(sintoma, user_input, respuesta_ia)
@@ -823,7 +829,6 @@ class SistemaConversacional:
         palabras_usuario = set(user_input.lower().split())
         palabras_bot = set(respuesta_bot.lower().split())
         
-        # Simplificar para ejemplo - en la práctica usarías técnicas NLP más avanzadas
         for palabra in palabras_usuario:
             if palabra not in self.sistema_aprendizaje.patrones_conversacion:
                 self.sistema_aprendizaje.patrones_conversacion[palabra] = {}
@@ -862,7 +867,7 @@ class SistemaConversacional:
                     ultima_respuesta_bot['mensaje']
                 )
 
-# ===================== FUNCIONES DE CALENDARIO =====================
+# FUNCIONES DE CALENDARIO 
 def get_calendar_service():
     try:
         # Validar que las credenciales existan
@@ -918,7 +923,7 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
         app.logger.error(f"Error inesperado al crear evento: {e}")
         return None
 
-# ===================== FUNCIÓN DE CORREO =====================
+# FUNCIÓN DE CORREO 
 def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
     remitente = os.getenv("EMAIL_USER")
     password = os.getenv("EMAIL_PASSWORD")
@@ -953,7 +958,7 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
         app.logger.error(f"Error enviando correo: {e}")
         return False
 
-# ===================== LIMPIADOR AUTOMÁTICO DE DATOS =====================
+# LIMPIADOR AUTOMÁTICO DE DATOS 
 def limpiar_datos_aprendizaje():
     """Limpia periódicamente datos de aprendizaje antiguos o poco útiles"""
     try:
@@ -975,7 +980,7 @@ def limpiar_datos_aprendizaje():
                     if (datetime.now() - ultimo_uso).days > 30 or stats['veces_usada'] < 2:
                         del sistema_aprendizaje.respuestas_efectivas[sintoma][respuesta]
                 
-                # Eliminar síntomas sin respuestas
+                
                 if not sistema_aprendizaje.respuestas_efectivas[sintoma]:
                     del sistema_aprendizaje.respuestas_efectivas[sintoma]
             
@@ -985,14 +990,13 @@ def limpiar_datos_aprendizaje():
     except Exception as e:
         app.logger.error(f"Error limpiando datos de aprendizaje: {e}")
 
-# Iniciar hilo de limpieza en segundo plano (solo en producción)
 if os.environ.get('FLASK_ENV') == 'production':
     hilo_limpieza = threading.Thread(target=limpiar_datos_aprendizaje, daemon=True)
     hilo_limpieza.start()
 
-# ===================== RUTAS PRINCIPALES =====================
+# RUTAS PRINCIPALES 
 @app.route("/", methods=["GET", "POST"])
-@limiter.limit("30 per minute")
+@limiter.limit("15 per minute")  # Más restrictivo para conversaciones
 def index():
     # ✅ Asegurar que fechas_validas siempre exista en la sesión
     if "fechas_validas" not in session:
@@ -1069,13 +1073,11 @@ def index():
                     )
                     conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
                 else:
-                    # MEJORA: Si el usuario cancela o no quiere cita, volver al diálogo normal
                     session["estado"] = "profundizacion"
                     respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
                     conversacion.agregar_interaccion('bot', f"Entendido, continuemos conversando. {respuesta}", session["sintoma_actual"])
 
         elif estado_actual == "agendar_cita":
-            # MEJORA: Manejar correctamente la cancelación de citas
             if "cancelar_cita" in request.form:
                 session["estado"] = "profundizacion"
                 conversacion.agregar_interaccion('bot', "Entendido, no hay problema. ¿Hay algo más en lo que pueda ayudarte hoy?", session["sintoma_actual"])
@@ -1146,7 +1148,6 @@ def index():
 def reset():
     try:
         session.clear()
-        # Inicializar una nueva conversación con fechas_validas
         conversacion = SistemaConversacional()
         session["conversacion_data"] = conversacion.to_dict()
         session["estado"] = "inicio"
@@ -1165,7 +1166,7 @@ def reset():
         app.logger.error(f"Error al reiniciar sesión: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ===================== RUTA PARA CANCELAR CITA =====================
+# RUTA PARA CANCELAR CITA 
 @app.route("/cancelar_cita", methods=["POST"])
 def cancelar_cita():
     """Nueva ruta para manejar la cancelación de citas de manera explícita"""
@@ -1181,7 +1182,7 @@ def cancelar_cita():
         app.logger.error(f"Error al cancelar cita: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
-# ===================== RUTAS DE MONITOREO DE APRENDIZAJE =====================
+# RUTAS DE MONITOREO DE APRENDIZAJE 
 @app.route("/admin/aprendizaje")
 @limiter.limit("10 per minute")
 def monitoreo_aprendizaje():
@@ -1207,13 +1208,14 @@ def reiniciar_aprendizaje():
     
     if "conversacion_data" in session:
         conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
-        conversacion.sistema_aprendizaje = SistemaAprendizaje()  # Reiniciar aprendizaje
+        conversacion.sistema_aprendizaje = SistemaAprendizaje()  
         session["conversacion_data"] = conversacion.to_dict()
     
     return jsonify({"status": "Aprendizaje reiniciado"})
 
 # ===================== RUTAS ADICIONALES =====================
 @app.route("/verificar-horario", methods=["POST"])
+@limiter.limit("30 per minute")  
 def verificar_horario():
     try:
         data = request.get_json()
@@ -1238,6 +1240,25 @@ def verificar_horario():
         app.logger.error(f"Error inesperado al verificar horario: {e}")
         return jsonify({"error": "Error interno del servidor"}), 500
 
+#Ruta de health check
+@app.route('/health')
+def health_check():
+    try:
+        groq_ok = bool(os.getenv('GROQ_API_KEY'))
+        email_ok = bool(os.getenv('EMAIL_USER'))
+        calendar_ok = bool(os.getenv('GOOGLE_CREDENTIALS'))
+        
+        return jsonify({
+            'status': 'healthy',
+            'services': {
+                'groq': groq_ok,
+                'email': email_ok,
+                'calendar': calendar_ok
+            }
+        })
+    except Exception as e:
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
 @app.errorhandler(429)
 def ratelimit_handler(e):
     app.logger.warning(f"Límite de tasa excedido: {e}")
@@ -1254,7 +1275,6 @@ def not_found(error):
 
 # ===================== CONFIGURACIÓN PARA RENDER =====================
 if __name__ == "__main__":
-    # Verificar variables de entorno críticas en producción
     if os.environ.get('FLASK_ENV') == 'production':
         required_env_vars = ["FLASK_SECRET_KEY", "EMAIL_USER", "EMAIL_PASSWORD", "PSICOLOGO_EMAIL", "GOOGLE_CREDENTIALS", "GROQ_API_KEY"]
         missing_vars = [var for var in required_env_vars if not os.getenv(var)]

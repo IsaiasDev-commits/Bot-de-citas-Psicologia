@@ -37,7 +37,7 @@
       --space-xl: 32px;
     }
 
-    /* Modo oscuro - Mejorado contraste WCAG 2.1 AA */
+    /* Modo oscuro - WCAG 2.1 AA */
     [data-theme="dark"] {
       --primary: #66BB6A;
       --primary-dark: #81C784;
@@ -137,7 +137,7 @@
       transform: translateY(-2px);
     }
 
-    /* Chat - Mejorado para teclados virtuales */
+    /* Chat - Para teclados virtuales */
     .chat-container {
       height: 400px;
       max-height: 60vh;
@@ -151,7 +151,7 @@
       -webkit-overflow-scrolling: touch;
     }
 
-    /* Mejora para teclados virtuales en móviles */
+    /* Para teclados virtuales en móviles */
     @media (max-height: 600px) {
       .chat-container {
         max-height: 50vh;
@@ -279,7 +279,7 @@
       resize: vertical;
     }
 
-    /* BOTONES MEJORADOS */
+    /* BOTONES */
     button, input[type="submit"] {
       padding: var(--space-md) var(--space-lg);
       background-color: var(--primary);
@@ -461,7 +461,7 @@
       animation: shake 0.5s;
     }
 
-    /* Progress indicator MEJORADO - Horizontal en todos los dispositivos */
+    /* Progress indicator- Horizontal en todos los dispositivos */
     .progress-container {
       margin-bottom: var(--space-lg);
       width: 100%;
@@ -688,7 +688,7 @@
       50% { transform: translateY(-5px); }
     }
 
-    /* Mejoras de accesibilidad */
+    /* Accesibilidad */
     @media (prefers-reduced-motion: reduce) {
       * {
         animation-duration: 0.01ms !important;
@@ -697,7 +697,7 @@
       }
     }
 
-    /* Mejor contraste para modo oscuro */
+    /* contraste para modo oscuro */
     [data-theme="dark"] .message.user {
       background-color: #1e3a2b;
       color: #e0e0e0;
@@ -749,7 +749,7 @@
       </div>
     </div>
 
-    <!-- CONTENEDOR MEJORADO para progress indicator -->
+    <!-- CONTENEDOR para progress indicator -->
     <div class="progress-container">
       <div class="progress-indicator" role="progressbar" aria-valuenow="{% if estado == 'inicio' %}1{% elif estado == 'evaluacion' %}2{% elif estado in ['profundizacion', 'derivacion'] %}3{% elif estado == 'agendar_cita' %}4{% elif estado == 'fin' %}5{% endif %}" aria-valuemin="1" aria-valuemax="5" aria-label="Progreso de la conversación">
         <div class="step {% if estado == 'inicio' %}active{% endif %}" aria-current="{% if estado == 'inicio' %}step{% endif %}">Inicio</div>
@@ -932,7 +932,7 @@
   </div>
 
   <script>
-    // ===================== TEMA =====================
+    // TEMA 
     function setTheme(theme) {
       document.body.setAttribute('data-theme', theme);
       localStorage.setItem('theme', theme);
@@ -1017,7 +1017,7 @@
       form.submit();
     }
 
-    // ===================== REINICIAR CHAT =====================
+    // REINICIAR CHAT 
     async function reiniciarChat() {
       mostrarEscribiendo();
       const btn = event.target.closest('button') || event.target;
@@ -1050,7 +1050,7 @@
       }
     }
 
-    // ===================== CANCELAR CITA =====================
+    // CANCELAR CITA 
     async function cancelarCita() {
       mostrarEscribiendo();
       
@@ -1079,7 +1079,7 @@
       }
     }
 
-    // ===================== HORARIOS =====================
+    // HORARIOS 
     const horariosPorDia = {
       0: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Lunes
       1: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Martes

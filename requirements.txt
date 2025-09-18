@@ -1,3 +1,4 @@
+
 Flask>=2.3.3
 python-dotenv>=1.0.0
 google-api-python-client>=2.104.0
@@ -8,7 +9,6 @@ Werkzeug>=2.3.7
 flask-limiter>=3.5.0
 flask-wtf>=1.1.1
 environs>=11.0.0
-gunicorn>=21.2.0
 groq>=0.3.0
 requests>=2.31.0
 blinker>=1.7.0
