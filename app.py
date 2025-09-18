@@ -120,7 +120,7 @@ class SistemaAprendizaje:
                     json.dump({
                         'respuestas_efectivas': self.respuestas_efectivas,
                         'patrones_conversacion': self.patrones_conversacion
-                    }, f, ensure_asci=False, indent=2)
+                    }, f, ensure_ascii=False, indent=2)
         except Exception as e:
             app.logger.error(f"Error guardando aprendizaje: {e}")
     
@@ -268,8 +268,6 @@ sintomas_disponibles = [
     "Taquicardia", "Dificultad para respirar", "Problemas de alimentación",
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
-
-# Respuestas genéricas en lugar de específicas por síntoma
 respuestas_por_sintoma = {
      "Ansiedad": [
         "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
@@ -681,7 +679,6 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
@@ -709,7 +706,14 @@ class SistemaConversacional:
         return instance
 
     def obtener_respuesta_predefinida(self, sintoma):
-        return random.choice(respuestas_por_sintoma)
+        respuestas_genericas = [
+            "Entiendo que estés pasando por un momento difícil. ¿Qué has intentado para manejar esta situación?",
+            "Es completamente normal sentirse así. ¿Te gustaría hablar más sobre qué desencadenó estos sentimientos?",
+            "Agradezco que compartas esto conmigo. ¿Cómo ha afectado esto tu día a día?",
+            "Parece que esto te está afectando profundamente. ¿Puedes contarme un poco más?",
+            "Tu bienestar es importante. ¿Qué crees que podría ayudarte en este momento?",
+        ]
+        return random.choice(respuestas_genericas)
 
     def obtener_respuesta_ia(self, sintoma, user_input):
         try:
@@ -764,7 +768,7 @@ class SistemaConversacional:
         self.aprender_de_interaccion(sintoma, user_input, respuesta_ia)
         
         # SOLO sugerir cita después de 3 interacciones si el usuario NO la ha solicitado
-        if (self.contador_interaccions >= 3 and 
+        if (self.contador_interacciones >= 3 and 
             not any(palabra in respuesta_ia.lower() for palabra in palabras_cita) and
             not any(palabra in input_lower for palabra in palabras_cita)):
             respuesta_ia += " ¿Has considerado la posibilidad de hablar con un psicólogo profesional? Podría ofrecerte un apoyo más personalizado."
