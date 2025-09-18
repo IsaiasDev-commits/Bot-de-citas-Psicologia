@@ -171,7 +171,7 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
             app.logger.error("GROQ_API_KEY no configurada")
             return None
             
-        client = Groq(api_key=api_key, timeout=15)
+        client = Groq(api_key=api_key, timeout=30)
         
         completion = client.chat.completions.create(
             model=modelo,
@@ -179,7 +179,7 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
                 {
                     "role": "system",
                     "content": """Eres Equilibra, un asistente psicológico empático y profesional. 
-                    Tu objetivo es ayudar a las personas to reflexionar sobre sus emociones y, 
+                    Tu objetivo es ayudar a las personas a reflexionar sobre sus emociones y, 
                     cuando sea apropiado, sugerir una cita con un psicólogo profesional.
                     
                     DIRECTRICES:
@@ -191,11 +191,8 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
                     6. Después de 2-3 interacciones, sugiere amablemente una cita presencial
                     7. Si el usuario menciona crisis grave, derívalo inmediatamente a ayuda profesional
                     
-                    EJEMPLOS DE RESPUESTAS ADECUADAS:
-                    - "Entiendo que estés pasando por un momento difícil. ¿Qué has intentado para manejar esta situación?"
-                    - "Es completamente normal sentirse así en estas circunstancias. ¿Te gustaría hablar más sobre qué desencadenó estos sentimientos?"
-                    - "Agradezco que compartas esto conmigo. ¿Cómo ha afectado esto tu día a día?"
-                    - "Parece que esto te está afectando profundamente. ¿Has considerado hablar con un profesional que pueda ayudarte de manera más personalizada?"""
+                    IMPORTANTE: Devuelve siempre respuestas COMPLETAS y bien formadas.
+                    """
                 },
                 {
                     "role": "user",
@@ -203,13 +200,21 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
                 }
             ],
             temperature=0.7,
-            max_tokens=150,
+            max_tokens=250,
             top_p=0.9,
             stream=False,
-            timeout=15
+            timeout=30
         )
         
-        return completion.choices[0].message.content.strip()
+        respuesta = completion.choices[0].message.content.strip()
+        
+        # Verificar si la respuesta está truncada (termina con ... o sin puntuación)
+        if respuesta and (respuesta.endswith('...') or not respuesta.endswith(('.', '!', '?'))):
+            app.logger.warning(f"Respuesta posiblemente truncada: {respuesta}")
+            # Intentar con un modelo alternativo
+            return generar_respuesta_llm(prompt, modelo="llama-3.3-70b-versatile")
+        
+        return respuesta
     
     except Exception as e:
         app.logger.error(f"Error al generar respuesta con Groq: {e}")
@@ -268,8 +273,9 @@ sintomas_disponibles = [
     "Taquicardia", "Dificultad para respirar", "Problemas de alimentación",
     "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
 ]
+
 respuestas_por_sintoma = {
-     "Ansiedad": [
+    "Ansiedad": [
         "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
         "Cuando sientes ansiedad, ¿qué técnicas has probado para calmarte?",
         "¿Notas que la ansiedad afecta tu cuerpo (ej. taquicardia, sudoración)?",
@@ -679,6 +685,7 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
+
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
@@ -1180,13 +1187,23 @@ def verificar_horario():
         if not data or 'fecha' not in data or 'hora' not in data:
             return jsonify({"error": "Datos incompletos"}), 400
         
-        cache_key = f"{data['fecha']}_{data['hora']}"
+        fecha = data['fecha']
+        hora = data['hora']
+        
+        # Validar formato de fecha y hora
+        try:
+            datetime.strptime(fecha, "%Y-%m-%d")
+            datetime.strptime(hora, "%H:%M")
+        except ValueError:
+            return jsonify({"error": "Formato de fecha u hora inválido"}), 400
+        
+        cache_key = f"{fecha}_{hora}"
         current_time = time.time()
         
         with cache_lock:
             if cache_key in horarios_cache:
                 cache_time, cached_result = horarios_cache[cache_key]
-                if current_time - cache_time < 300:
+                if current_time - cache_time < 300:  # 5 minutos de cache
                     app.logger.info(f"Usando cache para {cache_key}")
                     return jsonify(cached_result)
         
@@ -1194,18 +1211,43 @@ def verificar_horario():
         if not service:
             return jsonify({"error": "Servicio de calendario no disponible"}), 500
             
+        # Verificar MÁS ESTRICTAMENTE los eventos existentes
+        start_time = f"{fecha}T{hora}:00-05:00"
+        end_time = f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00"
+        
         eventos = service.events().list(
             calendarId='primary',
-            timeMin=f"{data['fecha']}T{data['hora']}:00-05:00",
-            timeMax=f"{data['fecha']}T{int(data['hora'].split(':')[0])+1}:00:00-05:00",
+            timeMin=start_time,
+            timeMax=end_time,
             singleEvents=True,
-            maxResults=1
+            maxResults=10
         ).execute()
         
-        disponible = len(eventos.get('items', [])) == 0
+        # Verificar si hay algún evento que se superponga
+        disponible = True
+        for evento in eventos.get('items', []):
+            evento_start = evento['start'].get('dateTime', evento['start'].get('date'))
+            evento_end = evento['end'].get('dateTime', evento['end'].get('date'))
+            
+            # Conversión a datetime para comparación precisa
+            try:
+                evento_start_dt = datetime.fromisoformat(evento_start.replace('Z', '+00:00'))
+                evento_end_dt = datetime.fromisoformat(evento_end.replace('Z', '+00:00'))
+                hora_verificar_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                
+                # Verificar superposición
+                if evento_start_dt <= hora_verificar_dt < evento_end_dt:
+                    disponible = False
+                    break
+            except ValueError as e:
+                app.logger.error(f"Error parsing event time: {e}")
+                continue
         
         with cache_lock:
-            horarios_cache[cache_key] = (current_time, {"disponible": disponible})
+            horarios_cache[cache_key] = (current_time, {
+                "disponible": disponible,
+                "timestamp": current_time
+            })
         
         return jsonify({"disponible": disponible})
         
@@ -1215,6 +1257,30 @@ def verificar_horario():
     except Exception as e:
         app.logger.error(f"Error inesperado al verificar horario: {e}")
         return jsonify({"error": "Error interno del servidor"}), 500
+
+def verificar_disponibilidad_atomica(fecha, hora):
+    """Verificación atómica sin cache para evitar condiciones de carrera"""
+    try:
+        service = get_calendar_service()
+        if not service:
+            return {"disponible": False, "error": "Servicio no disponible"}
+            
+        start_time = f"{fecha}T{hora}:00-05:00"
+        end_time = f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00"
+        
+        eventos = service.events().list(
+            calendarId='primary',
+            timeMin=start_time,
+            timeMax=end_time,
+            singleEvents=True,
+            maxResults=5
+        ).execute()
+        
+        return {"disponible": len(eventos.get('items', [])) == 0}
+        
+    except Exception as e:
+        app.logger.error(f"Error en verificación atómica: {e}")
+        return {"disponible": False, "error": str(e)}
 
 @app.route("/agendar-cita", methods=["POST"])
 @cita_limiter.limit("40 per minute")
@@ -1229,28 +1295,39 @@ def agendar_cita():
             if field not in data or not data[field]:
                 return jsonify({"error": f"Campo requerido: {field}"}), 400
         
-        valido, mensaje_error = validar_telefono(data["telefono"])
+        fecha = data["fecha"]
+        hora = data["hora"]
+        telefono = data["telefono"]
+        sintoma = data["sintoma"]
+        
+        # VERIFICACIÓN ATÓMICA: Revisar disponibilidad justo antes de agendar
+        verificacion = verificar_disponibilidad_atomica(fecha, hora)
+        if not verificacion["disponible"]:
+            return jsonify({"error": "El horario ya no está disponible. Por favor selecciona otro."}), 409
+        
+        valido, mensaje_error = validar_telefono(telefono)
         if not valido:
             return jsonify({"error": mensaje_error}), 400
             
-        evento_url = crear_evento_calendar(
-            data["fecha"],
-            data["hora"],
-            data["telefono"],
-            data["sintoma"]
-        )
+        evento_url = crear_evento_calendar(fecha, hora, telefono, sintoma)
         
         if not evento_url:
             return jsonify({"error": "Error al crear la cita en el calendario"}), 500
             
         if not enviar_correo_confirmacion(
             os.getenv("PSICOLOGO_EMAIL"),
-            data["fecha"],
-            data["hora"],
-            data["telefono"],
-            data["sintoma"]
+            fecha,
+            hora,
+            telefono,
+            sintoma
         ):
             app.logger.warning("Cita agendada pero error al enviar correo de confirmación")
+            
+        # Limpiar cache para este horario
+        with cache_lock:
+            cache_key = f"{fecha}_{hora}"
+            if cache_key in horarios_cache:
+                del horarios_cache[cache_key]
             
         return jsonify({
             "status": "success",
