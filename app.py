@@ -208,7 +208,7 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
         
         respuesta = completion.choices[0].message.content.strip()
         
-        # Verificar si la respuesta está truncada (termina con ... o sin puntuación)
+        # Verificar si la respuesta está truncada 
         if respuesta and (respuesta.endswith('...') or not respuesta.endswith(('.', '!', '?'))):
             app.logger.warning(f"Respuesta posiblemente truncada: {respuesta}")
             # Intentar con un modelo alternativo
@@ -888,16 +888,16 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
     mensaje = MIMEMultipart()
     mensaje['From'] = remitente
     mensaje['To'] = destinatario
-    mensaje['Subject'] = f"Nueva cita presencial agendada - {fecha} {hora}"
+    mensaje['Subject'] = f"Nueva cita agendada - {fecha} {hora}"
     
     cuerpo = f"""
-    📅 Nueva cita presencial agendada:
+    📅 Nueva cita agendada:
     Fecha: {fecha}
     Hora: {hora}
     Teléfono: {telefono}
     Síntoma principal: {sintoma}
     
-    El paciente será contactado para confirmar cita.
+    Nueva cita agendada.
     """
     mensaje.attach(MIMEText(cuerpo, 'plain'))
     
@@ -1036,7 +1036,7 @@ def index():
                 # El usuario envió un mensaje de texto
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                # Si el usuario menciona cita en el texto, IR DIRECTAMENTE
+                # Si el usuario menciona cita en el texto, ir directo
                 if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]):
                     session["estado"] = "agendar_cita"
                     mensaje = (
@@ -1211,7 +1211,7 @@ def verificar_horario():
         if not service:
             return jsonify({"error": "Servicio de calendario no disponible"}), 500
             
-        # Verificar MÁS ESTRICTAMENTE los eventos existentes
+        # Verificar Estrictamente los eventos existentes
         start_time = f"{fecha}T{hora}:00-05:00"
         end_time = f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00"
         
@@ -1300,7 +1300,7 @@ def agendar_cita():
         telefono = data["telefono"]
         sintoma = data["sintoma"]
         
-        # VERIFICACIÓN ATÓMICA: Revisar disponibilidad justo antes de agendar
+        # Revisar disponibilidad justo antes de agendar
         verificacion = verificar_disponibilidad_atomica(fecha, hora)
         if not verificacion["disponible"]:
             return jsonify({"error": "El horario ya no está disponible. Por favor selecciona otro."}), 409

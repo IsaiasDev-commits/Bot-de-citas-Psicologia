@@ -208,7 +208,7 @@
       color: var(--primary);
     }
 
-    /* Typing indicator */
+    /* Indicador de escritura */
     .typing-indicator {
       display: flex;
       align-items: center;
@@ -243,7 +243,7 @@
       animation-delay: 0.4s;
     }
 
-    /* Formas */
+    /* Formularios */
     form {
       background-color: var(--surface);
       padding: var(--space-md);
@@ -367,7 +367,7 @@
       font-size: 1.1em;
     }
 
-    /* Radio button list */
+    /* Lista de radio buttons */
     .radio-list {
       display: flex;
       flex-direction: column;
@@ -398,7 +398,7 @@
       accent-color: var(--primary);
     }
 
-    /* Utility classes */
+    /* Clases de utilidad */
     .section-title {
       font-size: 1.2rem;
       font-weight: 600;
@@ -461,7 +461,7 @@
       animation: shake 0.5s;
     }
 
-    /* Progress indicator- Horizontal en todos los dispositivos */
+    /* Indicador de progreso - Horizontal en todos los dispositivos */
     .progress-container {
       margin-bottom: var(--space-lg);
       width: 100%;
@@ -546,7 +546,7 @@
       border-color: var(--primary);
     }
 
-    /* Toggle dark mode button */
+    /* Botón de modo oscuro */
     .toggle-dark {
       cursor: pointer;
       font-size: 1.5rem;
@@ -678,7 +678,7 @@
       }
     }
 
-    /* Animations */
+    /* Animaciones */
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
@@ -697,7 +697,7 @@
       }
     }
 
-    /* contraste para modo oscuro */
+    /* Contraste para modo oscuro */
     [data-theme="dark"] .message.user {
       background-color: #1e3a2b;
       color: #e0e0e0;
@@ -749,7 +749,7 @@
       </div>
     </div>
 
-    <!-- CONTENEDOR para progress indicator -->
+    <!-- Contenedor para el indicador de progreso -->
     <div class="progress-container">
       <div class="progress-indicator" role="progressbar" aria-valuenow="{% if estado == 'inicio' %}1{% elif estado == 'evaluacion' %}2{% elif estado in ['profundizacion', 'derivacion'] %}3{% elif estado == 'agendar_cita' %}4{% elif estado == 'fin' %}5{% endif %}" aria-valuemin="1" aria-valuemax="5" aria-label="Progreso de la conversación">
         <div class="step {% if estado == 'inicio' %}active{% endif %}" aria-current="{% if estado == 'inicio' %}step{% endif %}">Inicio</div>
@@ -843,7 +843,7 @@
       </div>
       <form method="POST" action="/" class="card">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <!-- CAMPO OCULTO AGREGADO PARA SOLICITAR CITA -->
+        <!-- Campo oculto agregado para solicitar cita -->
         <input type="hidden" name="solicitar_cita" id="solicitarCitaHidden" value="false">
         
         <textarea name="user_input" placeholder="Escribe tu respuesta aquí..." rows="3" required aria-label="Escribe tu respuesta"></textarea>
@@ -988,7 +988,7 @@
       return div.innerHTML;
     }
 
-    // FUNCIÓN ACTUALIZADA PARA SOLICITAR CITA
+    // Función actualizada para solicitar cita
     function solicitarCita() {
       mostrarEscribiendo();
       
@@ -999,7 +999,7 @@
       document.querySelector('form').submit();
     }
 
-    // REINICIAR CHAT 
+    // Reiniciar chat 
     async function reiniciarChat() {
       mostrarEscribiendo();
       const btn = event.target.closest('button') || event.target;
@@ -1032,7 +1032,7 @@
       }
     }
 
-    // CANCELAR CITA 
+    // Cancelar cita 
     async function cancelarCita() {
       mostrarEscribiendo();
       
