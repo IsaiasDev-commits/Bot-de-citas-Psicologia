@@ -685,7 +685,6 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
-
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
@@ -751,7 +750,7 @@ class SistemaConversacional:
 
     def obtener_respuesta(self, sintoma, user_input):
         if detectar_crisis(user_input):
-            return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 o con tu psicólogo de confianza."
+            return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 or con tu psicólogo de confianza."
 
         palabras_cita = ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]
         input_lower = user_input.lower()
@@ -1056,7 +1055,7 @@ def index():
             user_input = sanitizar_input(request.form.get("user_input", "").strip())
             solicitar_cita = request.form.get("solicitar_cita")
             
-            # Si solicita cita (por botón o texto), IR DIRECTAMENTE
+            # Si solicita cita (por botón or texto), IR DIRECTAMENTE
             if (solicitar_cita and solicitar_cita.lower() == "true") or \
                (user_input and any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale", "por favor"])):
                 
@@ -1203,7 +1202,7 @@ def verificar_horario():
         with cache_lock:
             if cache_key in horarios_cache:
                 cache_time, cached_result = horarios_cache[cache_key]
-                if current_time - cache_time < 300:  # 5 minutos de cache
+                if current_time - cache_time < 10:  # Reducido a 10 segundos
                     app.logger.info(f"Usando cache para {cache_key}")
                     return jsonify(cached_result)
         
@@ -1268,15 +1267,21 @@ def verificar_disponibilidad_atomica(fecha, hora):
         start_time = f"{fecha}T{hora}:00-05:00"
         end_time = f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00"
         
+        # Verificacion estricta de eventos
         eventos = service.events().list(
             calendarId='primary',
             timeMin=start_time,
             timeMax=end_time,
             singleEvents=True,
-            maxResults=5
+            maxResults=5,
+            orderBy='startTime'
         ).execute()
         
-        return {"disponible": len(eventos.get('items', [])) == 0}
+        # Si hay algún evento en este rango, no está disponible
+        if eventos.get('items'):
+            return {"disponible": False, "error": "Horario ya ocupado"}
+        
+        return {"disponible": True}
         
     except Exception as e:
         app.logger.error(f"Error en verificación atómica: {e}")
@@ -1323,7 +1328,7 @@ def agendar_cita():
         ):
             app.logger.warning("Cita agendada pero error al enviar correo de confirmación")
             
-        # Limpiar cache para este horario
+        # Limpiar cache 
         with cache_lock:
             cache_key = f"{fecha}_{hora}"
             if cache_key in horarios_cache:
