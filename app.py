@@ -642,7 +642,7 @@ respuestas_por_sintoma = {
         "Los pensamientos intrusivos pueden ser muy molestos.",
         "¿Quieres contarme qué tipo de pensamientos te molestan?",
         "Hablar sobre ellos puede ayudarte a reducir su impacto.",
-        "Reconocerlos es un paso para poder manejarlos mejor.",
+        "Reconcerlos es un paso para poder manejarlos mejor.",
         "¿Sientes que afectan tu día a día o tu bienestar?",
         "¿Has probado técnicas para distraer tu mente o relajarte?",
         "Buscar apoyo puede facilitar que encuentres estrategias útiles.",
@@ -1322,26 +1322,47 @@ def health_check():
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
-# Nuevas rutas para SEO
+# Ruta para sitemap.xml corregida
 @app.route('/sitemap.xml')
 def sitemap():
+    """Generar sitemap XML correctamente"""
     try:
-        # Generar sitemap dinámicamente
-        url_root = request.url_root
-        pages = [
-            {"loc": url_root, "changefreq": "daily", "priority": "1.0"},
-        ]
+        url_root = request.url_root.rstrip('/')
         
-        sitemap_xml = render_template('sitemap.xml', pages=pages, url_root=url_root)
+        # Crear sitemap manualmente sin usar template
+        sitemap_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>{url_root}/</loc>
+        <lastmod>{datetime.now().strftime('%Y-%m-%d')}</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>1.0</priority>
+    </url>
+</urlset>'''
+        
         response = make_response(sitemap_xml)
         response.headers["Content-Type"] = "application/xml"
         return response
     except Exception as e:
-        return str(e), 500
+        app.logger.error(f"Error generando sitemap: {e}")
+        return '<?xml version="1.0" encoding="UTF-8"?><error>Error generating sitemap</error>', 500
 
+# Ruta para robots.txt corregida
 @app.route('/robots.txt')
 def robots():
-    return send_from_directory('static', 'robots.txt')
+    """Generar robots.txt dinámicamente"""
+    robots_txt = f"""User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /private/
+Disallow: /reset
+Disallow: /cancelar_cita
+
+Sitemap: {request.url_root.rstrip('/')}/sitemap.xml
+"""
+    response = make_response(robots_txt)
+    response.headers["Content-Type"] = "text/plain"
+    return response
 
 @app.errorhandler(429)
 def ratelimit_handler(e):
