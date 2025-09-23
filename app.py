@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory, make_response
 from datetime import datetime, timedelta
 import os
 import smtplib
@@ -191,7 +191,7 @@ def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
                     6. Después de 2-3 interacciones, sugiere amablemente una cita presencial
                     7. Si el usuario menciona crisis grave, derívalo inmediatamente a ayuda profesional
                     
-                    IMPORTANTE: Devuelve siempre respuestas COMPLETAS y bien formadas.
+                    IMPORTANTE: NO sugieras cita si el usuario no la ha solicitado explícitamente.
                     """
                 },
                 {
@@ -729,6 +729,7 @@ class SistemaConversacional:
             Último mensaje del usuario: "{user_input}"
             
             Por favor, responde de manera empática y profesional.
+            IMPORTANTE: NO sugieras cita a menos que el usuario la solicite explícitamente.
             """
             
             respuesta = generar_respuesta_llm(contexto, modelo="openai/gpt-oss-120b")
@@ -752,13 +753,9 @@ class SistemaConversacional:
         if detectar_crisis(user_input):
             return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 or con tu psicólogo de confianza."
 
-        palabras_cita = ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]
-        input_lower = user_input.lower()
+        # ELIMINADA la detección automática de palabras clave para cita
+        # Solo se activará con el botón explícito
         
-        # SI EL USUARIO SOLICITA CITA EXPLÍCITAMENTE, OFRECERLA INMEDIATAMENTE
-        if any(palabra in input_lower for palabra in palabras_cita):
-            return "Entiendo que te gustaría hablar con un profesional. ¿Te gustaría que te ayude a agendar una cita presencial con un psicólogo?"
-
         # Intentar con respuesta aprendida primero
         respuesta_aprendida = self.sistema_aprendizaje.obtener_mejor_respuesta(sintoma, user_input)
         if respuesta_aprendida:
@@ -773,11 +770,8 @@ class SistemaConversacional:
         # Aprender de esta interacción
         self.aprender_de_interaccion(sintoma, user_input, respuesta_ia)
         
-        # SOLO sugerir cita después de 3 interacciones si el usuario NO la ha solicitado
-        if (self.contador_interacciones >= 3 and 
-            not any(palabra in respuesta_ia.lower() for palabra in palabras_cita) and
-            not any(palabra in input_lower for palabra in palabras_cita)):
-            respuesta_ia += " ¿Has considerado la posibilidad de hablar con un psicólogo profesional? Podría ofrecerte un apoyo más personalizado."
+        # ELIMINADA la sugerencia automática de cita después de 3 interacciones
+        # Solo se sugerirá mediante el botón explícito
         
         return respuesta_ia
 
@@ -1017,6 +1011,7 @@ def index():
             user_input = sanitizar_input(request.form.get("user_input", "").strip())
             solicitar_cita = request.form.get("solicitar_cita")
             
+            # SOLO si el usuario presiona explícitamente el botón de solicitar cita
             if solicitar_cita and solicitar_cita.lower() == "true":
                 # El usuario hizo clic en el botón de solicitar cita - IR DIRECTAMENTE A AGENDAR
                 session["estado"] = "agendar_cita"
@@ -1032,48 +1027,13 @@ def index():
                 app.logger.info("Usuario solicitó cita mediante botón - Saltando a agendamiento")
                 
             elif user_input:
-                # El usuario envió un mensaje de texto
+                # El usuario envió un mensaje de texto - CONVERSACIÓN NORMAL SIN DETECCIÓN AUTOMÁTICA DE CITA
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                # Si el usuario menciona cita en el texto, ir directo
-                if any(palabra in user_input.lower() for palabra in ["cita", "consulta", "profesional", "psicólogo", "psicologo", "terapia", "agendar"]):
-                    session["estado"] = "agendar_cita"
-                    mensaje = (
-                        "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
-                        "📅 Selecciona una fecha disponible\n"
-                        "⏰ Elige un horario que te convenga\n"
-                        "📱 Ingresa tu número de teléfono para contactarte"
-                    )
-                    conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
-                    app.logger.info("Usuario solicitó cita mediante texto - Saltando a agendamiento")
-                else:
-                    # Conversación normal
-                    respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
-                    conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
-
-        elif estado_actual == "derivacion":
-            user_input = sanitizar_input(request.form.get("user_input", "").strip())
-            solicitar_cita = request.form.get("solicitar_cita")
-            
-            # Si solicita cita (por botón or texto), IR DIRECTAMENTE
-            if (solicitar_cita and solicitar_cita.lower() == "true") or \
-               (user_input and any(palabra in user_input.lower() for palabra in ["sí", "si", "quiero", "agendar", "cita", "ok", "vale", "por favor"])):
-                
-                session["estado"] = "agendar_cita"
-                mensaje = (
-                    "Excelente decisión. Por favor completa los datos para tu cita:\n\n"
-                    "📅 Selecciona una fecha disponible\n"
-                    "⏰ Elige un horario que te convenga\n"
-                    "📱 Ingresa tu número de teléfono para contactarte"
-                )
-                conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
-                app.logger.info("Usuario confirmó agendar cita - Saltando a agendamiento")
-                
-            elif user_input:
-                # Si no quiere cita, volver a conversación normal
-                session["estado"] = "profundizacion"
+                # ELIMINADA la detección automática de palabras clave para cita
+                # Solo responde normalmente
                 respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
-                conversacion.agregar_interaccion('bot', f"Entendido, continuemos conversando. {respuesta}", session["sintoma_actual"])
+                conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
 
         elif estado_actual == "agendar_cita":
             if request.form.get("cancelar_cita"):
@@ -1361,6 +1321,27 @@ def health_check():
         })
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
+# Nuevas rutas para SEO
+@app.route('/sitemap.xml')
+def sitemap():
+    try:
+        # Generar sitemap dinámicamente
+        url_root = request.url_root
+        pages = [
+            {"loc": url_root, "changefreq": "daily", "priority": "1.0"},
+        ]
+        
+        sitemap_xml = render_template('sitemap.xml', pages=pages, url_root=url_root)
+        response = make_response(sitemap_xml)
+        response.headers["Content-Type"] = "application/xml"
+        return response
+    except Exception as e:
+        return str(e), 500
+
+@app.route('/robots.txt')
+def robots():
+    return send_from_directory('static', 'robots.txt')
 
 @app.errorhandler(429)
 def ratelimit_handler(e):

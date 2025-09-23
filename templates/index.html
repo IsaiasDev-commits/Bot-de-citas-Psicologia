@@ -2,8 +2,55 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Equilibra - Tu espacio emocional seguro</title>
+  <title>Equilibra - Tu espacio emocional seguro | Apoyo Psicológico Online</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  
+  <!-- ==================== META TAGS SEO ESENCIALES ==================== -->
+  <meta name="description" content="Equilibra - Tu espacio emocional seguro. Asistente psicológico empático que te ayuda a reflexionar sobre tus emociones y conectar con profesionales de salud mental.">
+  <meta name="keywords" content="psicología, salud mental, emociones, terapia online, bienestar emocional, ansiedad, depresión, estrés, apoyo psicológico, psicólogo online, terapia virtual">
+  <meta name="author" content="Equilibra">
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+  <meta name="theme-color" content="#4CAF82">
+  
+  <!-- ==================== OPEN GRAPH (Facebook, LinkedIn) ==================== -->
+  <meta property="og:title" content="Equilibra - Tu espacio emocional seguro | Apoyo Psicológico Online">
+  <meta property="og:description" content="Asistente psicológico empático que te ayuda a reflexionar sobre tus emociones y conectar con profesionales de salud mental.">
+  <meta property="og:image" content="{{ url_for('static', filename='logo.png', _external=True) }}">
+  <meta property="og:url" content="{{ url_for('index', _external=True) }}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Equilibra">
+  <meta property="og:locale" content="es_ES">
+  
+  <!-- ==================== TWITTER CARD ==================== -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Equilibra - Tu espacio emocional seguro">
+  <meta name="twitter:description" content="Asistente psicológico empático para tu bienestar emocional">
+  <meta name="twitter:image" content="{{ url_for('static', filename='logo.png', _external=True) }}">
+  
+  <!-- ==================== SCHEMA.ORG STRUCTURED DATA ==================== -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "PsychologicalTreatment",
+    "name": "Equilibra - Espacio Emocional Seguro",
+    "description": "Asistente psicológico empático que ofrece apoyo emocional y conexión con profesionales de salud mental",
+    "url": "{{ url_for('index', _external=True) }}",
+    "serviceType": "Psychological Therapy",
+    "areaServed": "Ecuador",
+    "availableChannel": {
+      "@type": "ServiceChannel",
+      "serviceUrl": "{{ url_for('index', _external=True) }}"
+    }
+  }
+  </script>
+  
+  <!-- ==================== FAVICON Y ICONS ==================== -->
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='logo.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo.png') }}">
+  
+  <!-- ==================== CANONICAL URL ==================== -->
+  <link rel="canonical" href="{{ url_for('index', _external=True) }}">
+  
   <style>
     :root {
       /* Sistema de diseño */
@@ -46,9 +93,9 @@
       --background: #121212;
       --surface: #1E1E1E;
       --text-primary: #E0E0E0;
-      --text-secondary: #A0A0A0; /* Mejor contraste */
+      --text-secondary: #A0A0A0;
       --divider: #424242;
-      --error: #F44336; /* Rojo más visible en modo oscuro */
+      --error: #F44336;
     }
 
     * {
@@ -467,11 +514,11 @@
       width: 100%;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
-      scrollbar-width: none; /* Firefox */
+      scrollbar-width: none;
     }
 
     .progress-container::-webkit-scrollbar {
-      display: none; /* Chrome, Safari */
+      display: none;
     }
 
     .progress-indicator {
@@ -627,7 +674,6 @@
         font-size: 0.8rem;
       }
       
-      /* Ocultar línea conectora en móviles */
       .progress-indicator::before {
         display: none;
       }
@@ -745,7 +791,7 @@
     <div class="header">
       <h1>Equilibra</h1>
       <div class="logo-container">
-        <img src="{{ url_for('static', filename='logo.png') }}" alt="Equilibra - Espacio seguro">
+        <img src="{{ url_for('static', filename='logo.png') }}" alt="Equilibra - Espacio seguro para tu salud mental y bienestar emocional">
       </div>
     </div>
 
@@ -795,7 +841,7 @@
           <div class="message {{ msg.tipo }}" role="{{ 'complementary' if msg.tipo == 'bot' else 'region' }}">
             {% if msg.tipo == 'bot' %}
               <div class="message-header">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra" class="bot-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra - Asistente psicológico" class="bot-logo">
                 <strong>Equilibra:</strong>
               </div>
             {% else %}
@@ -823,7 +869,7 @@
           <div class="message {{ msg.tipo }}" role="{{ 'complementary' if msg.tipo == 'bot' else 'region' }}">
             {% if msg.tipo == 'bot' %}
               <div class="message-header">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra" class="bot-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra - Asistente psicológico" class="bot-logo">
                 <strong>Equilibra:</strong>
               </div>
             {% else %}
@@ -861,7 +907,7 @@
           <div class="message {{ msg.tipo }}" role="{{ 'complementary' if msg.tipo == 'bot' else 'region' }}">
             {% if msg.tipo == 'bot' %}
               <div class="message-header">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra" class="bot-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra - Asistente psicológico" class="bot-logo">
                 <strong>Equilibra:</strong>
               </div>
             {% else %}
@@ -915,7 +961,7 @@
           <div class="message {{ msg.tipo }}" role="{{ 'complementary' if msg.tipo == 'bot' else 'region' }}">
             {% if msg.tipo == 'bot' %}
               <div class="message-header">
-                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra" class="bot-logo">
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo de Equilibra - Asistente psicológico" class="bot-logo">
                 <strong>Equilibra:</strong>
               </div>
             {% else %}
@@ -1063,13 +1109,13 @@
 
     // ===================== HORARIOS =====================
     const horariosPorDia = {
-      0: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Lunes
-      1: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Martes
-      2: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Miércoles
-      3: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Jueves
-      4: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],  // Viernes
-      5: ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00"],  // Sábado
-      6: []  // Domingo
+      0: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],
+      1: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],
+      2: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],
+      3: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],
+      4: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],
+      5: ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00"],
+      6: []
     };
 
     const fechaCitaInput = document.querySelector('input[name="fecha_cita"]');
@@ -1081,14 +1127,12 @@
     // Cache para horarios ya verificados
     const horariosCache = new Map();
 
-    // Función con reintentos para solicitudes importantes
     async function fetchWithRetry(url, options, maxRetries = 3) {
       for (let i = 0; i < maxRetries; i++) {
         try {
           const response = await fetch(url, options);
           
           if (response.status === 429) {
-            // Esperar antes de reintentar (backoff exponencial)
             const waitTime = Math.pow(2, i) * 1000;
             await new Promise(resolve => setTimeout(resolve, waitTime));
             continue;
@@ -1167,7 +1211,6 @@
     async function cargarHorariosDisponibles(fecha) {
       if (!fecha) return;
       
-      // Verificar cache primero
       if (horariosCache.has(fecha)) {
         const cached = horariosCache.get(fecha);
         actualizarSelectHorarios(cached);
@@ -1195,7 +1238,6 @@
       let horariosDisponibles = [];
       
       try {
-        // Verificar disponibilidad para cada horario
         for (const hora of opciones) {
           try {
             const { disponible } = await verificarDisponibilidad(fecha, hora);
@@ -1206,7 +1248,6 @@
           }
         }
         
-        // Guardar en cache
         horariosCache.set(fecha, horariosDisponibles);
         actualizarSelectHorarios(horariosDisponibles);
         
@@ -1282,7 +1323,6 @@
         }
       });
 
-      // Validación al enviar el formulario
       citaForm?.addEventListener('submit', function(e) {
         if (!validarTelefono(telefonoInput.value)) {
           e.preventDefault();
@@ -1312,7 +1352,6 @@
       const progressContainer = document.querySelector('.progress-container');
       
       if (progressContainer) {
-        // Hacer scroll suave al elemento activo en móviles
         const activeStep = document.querySelector('.step.active');
         if (activeStep && window.innerWidth < 768) {
           setTimeout(() => {
@@ -1323,7 +1362,6 @@
           }, 300);
         }
 
-        // Mejorar el desplazamiento táctil con passive listeners
         let isDragging = false;
         let startX;
         let scrollLeft;
@@ -1353,7 +1391,6 @@
           progressContainer.scrollLeft = scrollLeft - walk;
         });
 
-        // Soporte para touch devices con passive listeners
         progressContainer.addEventListener('touchstart', (e) => {
           startX = e.touches[0].pageX - progressContainer.offsetLeft;
           scrollLeft = progressContainer.scrollLeft;
@@ -1368,7 +1405,6 @@
       }
     });
 
-    // Mejorar feedback táctil
     const touchElements = document.querySelectorAll('button, input[type="submit"], label');
     touchElements.forEach(el => {
       el.addEventListener('touchstart', () => {
@@ -1380,31 +1416,26 @@
       }, { passive: true });
     });
 
-    // Evitar zoom con doble toque
     document.addEventListener('dblclick', (e) => {
       e.preventDefault();
     }, { passive: false });
 
-    // Ajustar input de fecha en móviles
     if (window.innerWidth < 600 && document.querySelector('input[name="fecha_cita"]')) {
       document.querySelector('input[name="fecha_cita"]').type = 'datetime-local';
     }
 
-    // Ajustar scroll cuando el teclado aparece
     window.addEventListener('resize', () => {
       if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
         document.activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     });
 
-    // Mostrar escribiendo al cargar la página 
     if (document.getElementById('typingIndicator')) {
       setTimeout(() => {
         scrollToBottom();
       }, 100);
     }
 
-    // Validación de selección única en síntomas
     document.getElementById('sintomasForm')?.addEventListener('submit', function(e) {
       const seleccionado = document.querySelector('input[name="sintomas"]:checked');
       if (!seleccionado) {
@@ -1413,7 +1444,6 @@
       }
     });
 
-    // Navegación con teclado mejorada
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') {
         reiniciarChat();
@@ -1426,14 +1456,12 @@
       }
     });
 
-    // Auto-scroll al cargar la página
     window.addEventListener('load', () => {
       setTimeout(() => {
         scrollToBottom();
       }, 300);
     });
 
-    // Limpiar event listeners al salir de la página para evitar memory leaks
     window.addEventListener('beforeunload', function() {
       const elements = document.querySelectorAll('button, input, textarea, select');
       elements.forEach(el => {
