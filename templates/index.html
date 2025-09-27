@@ -615,6 +615,74 @@
       transform: scale(1.1);
     }
 
+    /* ===== SELECT DESKTOP ===== */
+    .select-desktop {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid var(--divider);
+        border-radius: var(--radius-md);
+        font-size: 16px;
+        background: var(--surface);
+        color: var(--text-primary);
+    }
+
+    .select-desktop option.hora-disponible {
+        color: var(--primary);
+        font-weight: 600;
+    }
+
+    .select-desktop option.hora-ocupada {
+        color: var(--text-secondary);
+        opacity: 0.6;
+    }
+
+    /* ===== BOTONES MÓVIL ===== */
+    .botones-mobile {
+        display: none;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 10px;
+        margin: 15px 0;
+    }
+
+    .boton-hora {
+        padding: 15px 10px;
+        border: 2px solid;
+        border-radius: var(--radius-md);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        min-height: 50px;
+        background: var(--surface);
+    }
+
+    .boton-hora.disponible {
+        border-color: var(--primary);
+        background: var(--primary-light);
+        color: var(--primary);
+    }
+
+    .boton-hora.disponible:hover {
+        background: var(--primary);
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    .boton-hora.ocupado {
+        border-color: var(--divider);
+        background: var(--divider);
+        color: var(--text-secondary);
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .boton-hora.seleccionado {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+        transform: scale(0.95);
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
       body {
@@ -684,6 +752,21 @@
       .radio-list label {
         padding: var(--space-sm) var(--space-md);
       }
+
+      /* ===== BOTONES MÓVIL RESPONSIVE ===== */
+      .select-desktop {
+          display: none;
+      }
+      
+      .botones-mobile {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+      }
+      
+      .boton-hora {
+          font-size: 16px;
+          padding: 18px 8px;
+      }
     }
 
     @media (max-width: 480px) {
@@ -714,6 +797,26 @@
       
       .section-title {
         font-size: 1.1rem;
+      }
+
+      /* ===== BOTONES MÓVIL MÁS PEQUEÑOS ===== */
+      .botones-mobile {
+          grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .boton-hora {
+          font-size: 14px;
+          padding: 15px 5px;
+      }
+    }
+
+    @media (min-width: 769px) {
+      .select-desktop {
+          display: block;
+      }
+      
+      .botones-mobile {
+          display: none;
       }
     }
 
@@ -926,11 +1029,25 @@
         <input type="date" name="fecha_cita" min="{{ fechas_validas.min_cita }}" max="{{ fechas_validas.max_cita }}" required aria-describedby="fecha-cita-desc" />
 
         <p class="section-title">Selecciona un horario disponible:</p>
-        <select name="hora_cita" required disabled aria-describedby="hora-cita-desc">
-          <option value="" disabled selected>Selecciona una hora</option>
-        </select>
-        <div id="sinAtencion" class="warning-msg" style="display:none;" aria-live="polite">🚫 No hay atención los domingos</div>
-        <div id="cargandoHorarios" class="info-msg" style="display:none;" aria-live="polite">Cargando horarios disponibles...</div>
+        
+        <!-- Contenedor principal de horarios -->
+        <div id="contenedorHorarios">
+            <!-- Select tradicional para desktop -->
+            <select name="hora_cita" id="selectHorariosDesktop" class="select-desktop" required disabled>
+                <option value="" disabled selected>Selecciona una hora</option>
+            </select>
+            
+            <!-- Botones para móvil -->
+            <div id="botonesHorariosMobile" class="botones-mobile">
+                <!-- Los botones se generarán aquí -->
+            </div>
+        </div>
+
+        <!-- Input hidden para almacenar la selección -->
+        <input type="hidden" name="hora_seleccionada" id="horaSeleccionada" required />
+
+        <div id="sinAtencion" class="warning-msg" style="display:none;">🚫 No hay atención los domingos</div>
+        <div id="cargandoHorarios" class="info-msg" style="display:none;">Cargando horarios disponibles...</div>
 
         <p class="section-title">Teléfono de contacto (requerido):</p>
         <input type="tel" name="telefono" id="telefonoInput" 
@@ -1110,7 +1227,7 @@
       }
     }
 
-    // ===================== HORARIOS =====================
+    // ===================== HORARIOS MEJORADOS =====================
     const horariosPorDia = {
       0: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],
       1: ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],
@@ -1122,7 +1239,9 @@
     };
 
     const fechaCitaInput = document.querySelector('input[name="fecha_cita"]');
-    const selectHora = document.querySelector('select[name="hora_cita"]');
+    const selectDesktop = document.getElementById('selectHorariosDesktop');
+    const botonesMobile = document.getElementById('botonesHorariosMobile');
+    const horaSeleccionadaInput = document.getElementById('horaSeleccionada');
     const sinAtencion = document.getElementById("sinAtencion");
     const cargandoHorarios = document.getElementById("cargandoHorarios");
     const citaForm = document.getElementById("citaForm");
@@ -1178,21 +1297,89 @@
       }
     }
 
-    function actualizarSelectHorarios(horarios) {
-      let optionsHTML = '<option value="" disabled selected>Selecciona una hora</option>';
-      
-      for (const { hora, disponible } of horarios) {
-        if (disponible) {
-          optionsHTML += `<option value="${hora}" class="hora-disponible">${hora} ✔ Disponible</option>`;
+    function actualizarInterfazHorarios(horarios) {
+        const selectDesktop = document.getElementById('selectHorariosDesktop');
+        const contenedorMobile = document.getElementById('botonesHorariosMobile');
+        
+        // Limpiar interfaces
+        selectDesktop.innerHTML = '<option value="" disabled selected>Selecciona una hora</option>';
+        contenedorMobile.innerHTML = '';
+        
+        // Variable para controlar selección única
+        let horaYaSeleccionada = false;
+        
+        horarios.forEach(({ hora, disponible }) => {
+            // ===== PARA DESKTOP (Select) =====
+            const option = document.createElement('option');
+            option.value = hora;
+            option.textContent = disponible ? `${hora} ✔ Disponible` : `${hora} ✖ Ocupado`;
+            option.disabled = !disponible;
+            option.classList.add(disponible ? 'hora-disponible' : 'hora-ocupada');
+            selectDesktop.appendChild(option);
+            
+            // ===== PARA MÓVIL (Botones) =====
+            const boton = document.createElement('button');
+            boton.type = 'button';
+            boton.className = `boton-hora ${disponible ? 'disponible' : 'ocupado'}`;
+            boton.textContent = disponible ? `${hora} ✔` : `${hora} ✖`;
+            boton.dataset.hora = hora;
+            boton.disabled = !disponible;
+            
+            if (disponible) {
+                boton.addEventListener('click', function() {
+                    // Prevenir doble selección
+                    if (horaYaSeleccionada) {
+                        document.querySelectorAll('.boton-hora.seleccionado').forEach(btn => {
+                            btn.classList.remove('seleccionado');
+                        });
+                        horaYaSeleccionada = false;
+                    }
+                    
+                    // Seleccionar este botón
+                    this.classList.add('seleccionado');
+                    document.getElementById('horaSeleccionada').value = this.dataset.hora;
+                    horaYaSeleccionada = true;
+                    
+                    // También actualizar el select de desktop
+                    selectDesktop.value = this.dataset.hora;
+                });
+            }
+            
+            contenedorMobile.appendChild(boton);
+        });
+        
+        // Habilitar interfaces
+        selectDesktop.disabled = horarios.length === 0;
+        
+        // Actualizar el select desktop cuando cambie
+        selectDesktop.addEventListener('change', function() {
+            document.getElementById('horaSeleccionada').value = this.value;
+            
+            // Actualizar botones móvil
+            document.querySelectorAll('.boton-hora').forEach(boton => {
+                boton.classList.remove('seleccionado');
+                if (boton.dataset.hora === this.value) {
+                    boton.classList.add('seleccionado');
+                }
+            });
+        });
+
+        // Ajustar interfaz según dispositivo
+        ajustarInterfazHorarios();
+    }
+
+    function ajustarInterfazHorarios() {
+        const isMobile = window.innerWidth <= 768;
+        const selectDesktop = document.getElementById('selectHorariosDesktop');
+        const botonesMobile = document.getElementById('botonesHorariosMobile');
+        
+        if (isMobile) {
+            selectDesktop.style.display = 'none';
+            botonesMobile.style.display = 'grid';
         } else {
-          optionsHTML += `<option value="${hora}" disabled class="hora-ocupada">${hora} ✖ Ocupado</option>`;
+            selectDesktop.style.display = 'block';
+            botonesMobile.style.display = 'none';
         }
-      }
-      
-      if (selectHora) {
-        selectHora.innerHTML = optionsHTML;
-        selectHora.disabled = false;
-      }
     }
 
     function mostrarError(mensaje) {
@@ -1216,21 +1403,24 @@
       
       if (horariosCache.has(fecha)) {
         const cached = horariosCache.get(fecha);
-        actualizarSelectHorarios(cached);
+        actualizarInterfazHorarios(cached);
         return;
       }
       
       const fechaObj = new Date(fecha);
       const dia = fechaObj.getDay();
 
-      if (selectHora) selectHora.disabled = true;
+      if (selectDesktop) selectDesktop.disabled = true;
       if (cargandoHorarios) cargandoHorarios.style.display = "block";
       if (sinAtencion) sinAtencion.style.display = "none";
 
       if (dia === 6) {
-        if (selectHora) {
-          selectHora.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
-          selectHora.disabled = true;
+        if (selectDesktop) {
+          selectDesktop.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
+          selectDesktop.disabled = true;
+        }
+        if (botonesMobile) {
+          botonesMobile.innerHTML = '<button type="button" class="boton-hora ocupado" disabled>🚫 No hay atención</button>';
         }
         if (sinAtencion) sinAtencion.style.display = "block";
         if (cargandoHorarios) cargandoHorarios.style.display = "none";
@@ -1252,7 +1442,7 @@
         }
         
         horariosCache.set(fecha, horariosDisponibles);
-        actualizarSelectHorarios(horariosDisponibles);
+        actualizarInterfazHorarios(horariosDisponibles);
         
       } catch (error) {
         console.error('Error cargando horarios:', error);
@@ -1262,7 +1452,12 @@
       }
     }
 
-    if (fechaCitaInput && selectHora) {
+    // Detectar cambios de tamaño para alternar interfaces
+    window.addEventListener('resize', function() {
+        ajustarInterfazHorarios();
+    });
+
+    if (fechaCitaInput) {
       fechaCitaInput.addEventListener("change", async function() {
         if (this.value) await cargarHorariosDisponibles(this.value);
       });
@@ -1272,9 +1467,12 @@
           const fecha = new Date(this.value + 'T00:00');
           if (fecha.getDay() === 0) {
             this.value = "";
-            if (selectHora) {
-              selectHora.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
-              selectHora.disabled = true;
+            if (selectDesktop) {
+              selectDesktop.innerHTML = '<option value="" disabled selected>🚫 No hay atención los domingos</option>';
+              selectDesktop.disabled = true;
+            }
+            if (botonesMobile) {
+              botonesMobile.innerHTML = '<button type="button" class="boton-hora ocupado" disabled>🚫 No hay atención</button>';
             }
             if (sinAtencion) sinAtencion.style.display = "block";
             if (cargandoHorarios) cargandoHorarios.style.display = "none";
@@ -1283,7 +1481,7 @@
       });
 
       citaForm?.addEventListener('submit', async function(e) {
-        const horaSeleccionada = selectHora.value;
+        const horaSeleccionada = horaSeleccionadaInput.value;
         if (horaSeleccionada) {
           const { disponible, mensaje } = await verificarDisponibilidad(
             fechaCitaInput.value, 
@@ -1295,6 +1493,9 @@
             alert(`No se puede agendar: ${mensaje || 'El horario ya está ocupado'}`);
             await cargarHorariosDisponibles(fechaCitaInput.value);
           }
+        } else {
+          e.preventDefault();
+          alert('Por favor selecciona un horario disponible.');
         }
       });
 
@@ -1302,6 +1503,11 @@
         cargarHorariosDisponibles(fechaCitaInput.value);
       }
     }
+
+    // Inicializar interfaz de horarios al cargar
+    document.addEventListener('DOMContentLoaded', function() {
+        ajustarInterfazHorarios();
+    });
 
     // ===================== VALIDACIÓN DE TELÉFONO =====================
     const telefonoInput = document.getElementById('telefonoInput');

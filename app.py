@@ -540,7 +540,7 @@ respuestas_por_sintoma = {
         "La concentración puede verse afectada por muchos factores.",
         "¿Quieres contarme cuándo notas más esta dificultad?",
         "Hablar de lo que te distrae puede ayudarte a mejorar tu foco.",
-        "Reconocer el problema es importante para buscar soluciones.",
+        "Reconcer el problema es importante para buscar soluciones.",
         "¿Sientes que tu mente está muy dispersa o cansada?",
         "¿Has probado técnicas como pausas cortas or ambientes tranquilos?",
         "El estrés y la ansiedad pueden influir en la concentración.",
@@ -685,6 +685,7 @@ respuestas_por_sintoma = {
         "Hablar con un profesional puede aclarar tus sentimientos."
     ]
 }
+
 class SistemaConversacional:
     def __init__(self):
         self.historial = []
@@ -753,9 +754,6 @@ class SistemaConversacional:
         if detectar_crisis(user_input):
             return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 or con tu psicólogo de confianza."
 
-        # ELIMINADA la detección automática de palabras clave para cita
-        # Solo se activará con el botón explícito
-        
         # Intentar con respuesta aprendida primero
         respuesta_aprendida = self.sistema_aprendizaje.obtener_mejor_respuesta(sintoma, user_input)
         if respuesta_aprendida:
@@ -769,9 +767,6 @@ class SistemaConversacional:
         
         # Aprender de esta interacción
         self.aprender_de_interaccion(sintoma, user_input, respuesta_ia)
-        
-        # ELIMINADA la sugerencia automática de cita después de 3 interacciones
-        # Solo se sugerirá mediante el botón explícito
         
         return respuesta_ia
 
@@ -1030,7 +1025,6 @@ def index():
                 # El usuario envió un mensaje de texto - CONVERSACIÓN NORMAL SIN DETECCIÓN AUTOMÁTICA DE CITA
                 conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
                 
-                # ELIMINADA la detección automática de palabras clave para cita
                 # Solo responde normalmente
                 respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
                 conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
@@ -1043,7 +1037,8 @@ def index():
             else:
                 fecha = request.form.get("fecha_cita")
                 telefono = request.form.get("telefono", "").strip()
-                hora = request.form.get("hora_cita")
+                # CAMBIO IMPORTANTE: Usar hora_seleccionada en lugar de hora_cita
+                hora = request.form.get("hora_seleccionada")
 
                 if fecha and telefono and hora:
                     valido, mensaje_error = validar_telefono(telefono)
@@ -1086,6 +1081,9 @@ def index():
                         else:
                             conversacion.agregar_interaccion('bot', "❌ Error al agendar. Intenta nuevamente", None)
                             app.logger.error(f"Error al agendar cita: {cita}")
+                else:
+                    conversacion.agregar_interaccion('bot', "⚠️ Por favor completa todos los campos requeridos.", None)
+                    app.logger.warning("Faltan campos en el formulario de cita")
 
         session["conversacion_data"] = conversacion.to_dict()
         return redirect(url_for("index"))
