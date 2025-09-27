@@ -1037,7 +1037,7 @@ def index():
             else:
                 fecha = request.form.get("fecha_cita")
                 telefono = request.form.get("telefono", "").strip()
-                # CAMBIO IMPORTANTE: Usar hora_seleccionada en lugar de hora_cita
+                # USAR hora_seleccionada EN LUGAR DE hora_cita
                 hora = request.form.get("hora_seleccionada")
 
                 if fecha and telefono and hora:

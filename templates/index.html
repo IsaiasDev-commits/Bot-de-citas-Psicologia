@@ -1629,9 +1629,11 @@
       e.preventDefault();
     }, { passive: false });
 
-    if (window.innerWidth < 600 && document.querySelector('input[name="fecha_cita"]')) {
-      document.querySelector('input[name="fecha_cita"]').type = 'datetime-local';
-    }
+    // ELIMINÉ LA LÍNEA QUE CAMBIA EL INPUT A DATETIME-LOCAL EN MÓVILES
+    // Esta línea era la culpable de mostrar el selector nativo de fecha/hora en iOS/Android
+    // if (window.innerWidth < 600 && document.querySelector('input[name="fecha_cita"]')) {
+    //   document.querySelector('input[name="fecha_cita"]').type = 'datetime-local';
+    // }
 
     window.addEventListener('resize', () => {
       if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
