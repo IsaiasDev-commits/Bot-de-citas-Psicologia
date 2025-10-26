@@ -5,8 +5,4 @@ Disallow: /private/
 Disallow: /reset
 Disallow: /cancelar_cita
 
-# Sitemap location
-Sitemap: {{ url_for('sitemap', _external=True) }}
-
-# Crawl delay (opcional, para no sobrecargar el servidor)
-Crawl-delay: 1
+Sitemap: https://equlibra.onrender.com/sitemap.xml
