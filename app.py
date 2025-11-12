@@ -1377,25 +1377,43 @@ def not_found(error):
     return jsonify({"error": "Endpoint no encontrado"}), 404
 
 if __name__ == "__main__":
-    if os.environ.get('FLASK_ENV') == 'production':
-        required_env_vars = ["FLASK_SECRET_KEY", "EMAIL_USER", "EMAIL_PASSWORD", "PSICOLOGO_EMAIL", "GOOGLE_CREDENTIALS", "GROQ_API_KEY"]
+    # Detectar si estamos corriendo en Render
+    running_in_render = "RENDER" in os.environ
+
+    # Considerar producción si:
+    # - está en Render, o
+    # - FLASK_ENV está explícitamente en "production"
+    is_production = running_in_render or os.environ.get("FLASK_ENV") == "production"
+
+    if is_production:
+        required_env_vars = [
+            "FLASK_SECRET_KEY",
+            "EMAIL_USER",
+            "EMAIL_PASSWORD",
+            "PSICOLOGO_EMAIL",
+            "GOOGLE_CREDENTIALS",
+            "GROQ_API_KEY"
+        ]
         missing_vars = [var for var in required_env_vars if not os.getenv(var)]
         
         if missing_vars:
             app.logger.error(f"ERROR: Variables de entorno faltantes en producción: {missing_vars}")
             exit(1)
     
+    # Asegurar directorios necesarios
     for directory in ["logs", "conversaciones", "datos"]:
         if not os.path.exists(directory):
             os.makedirs(directory)
     
+    # En Render, PORT viene del entorno. Localmente usa 5000.
     port = int(os.environ.get("PORT", 5000))
-    debug = os.environ.get('FLASK_ENV') != 'production'
     
     app.logger.info(f"Iniciando aplicación Equilibra en puerto {port}")
     
-    if os.environ.get('FLASK_ENV') == 'production':
+    if is_production:
+        # Producción (Render) → servidor robusto Waitress, sin debug
         from waitress import serve
-        serve(app, host='0.0.0.0', port=port)
+        serve(app, host="0.0.0.0", port=port)
     else:
-        app.run(host='0.0.0.0', port=port, debug=debug)
+        # Desarrollo local → servidor de Flask con debug
+        app.run(host="0.0.0.0", port=port, debug=True)
