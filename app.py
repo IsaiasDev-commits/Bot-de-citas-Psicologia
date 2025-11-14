@@ -1010,6 +1010,7 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
     """
     Versión para Resend que funciona en Render
     """
+    destinatario = "chatbotequilibra@gmail.com"
     try:
         resend_api_key = os.getenv('RESEND_API_KEY')
         
@@ -1030,6 +1031,7 @@ def enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma):
     """
     Usar Resend API para enviar emails (funciona en Render)
     """
+    destinatario = "chatbotequilibra@gmail.com"
     try:
         resend_api_key = os.getenv('RESEND_API_KEY')
         
@@ -1356,7 +1358,7 @@ def index():
                             if evento_url:
                                 # Intentar enviar email pero no bloquear si falla
                                 enviar_correo_confirmacion(
-                                    os.getenv("PSICOLOGO_EMAIL"),
+                                    "chatbotequilibra@gmail.com",
                                     cita["fecha"],
                                     cita["hora"],
                                     cita["telefono"],
@@ -1581,7 +1583,7 @@ def agendar_cita():
             
         # 5. Enviar correo de confirmación (no bloqueante)
         enviar_correo_confirmacion(
-            os.getenv("PSICOLOGO_EMAIL"),
+            "chatbotequilibra@gmail.com",
             fecha,
             hora,
             telefono,
