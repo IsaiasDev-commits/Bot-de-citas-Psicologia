@@ -401,8 +401,391 @@ respuestas_por_sintoma = {
         "¿Has probado escribir lo que sientes, sin filtros ni juicios?",
         "Estoy contigo en esto. ¿Qué necesitarías hoy para sentirte un poco mejor?"
     ],
-    # ... (mantener el resto de respuestas_por_sintoma igual)
-    # Para ahorrar espacio, mantengo la estructura pero elimino el contenido detallado
+    "Estrés": [
+        "¿Notas si el estrés aparece más en ciertos momentos del día?",
+        "A veces, solo detenerse y respirar ya es una forma de cuidarse.",
+        "¿Te estás exigiendo demasiado últimamente?",
+        "El estrés también habla de tus límites. ¿Puedes identificar alguno que fue cruzado?",
+        "Probar técnicas breves como estiramientos, música relajante o caminar puede ayudar.",
+        "¿Te has permitido no ser productivo un día sin sentir culpa?",
+        "Es posible organizar el caos en partes pequeñas. ¿Te ayudo a descomponerlo?",
+        "¿Tu cuerpo ha mostrado señales físicas de ese estrés (dolores, rigidez)?",
+        "Darte un espacio para ti es un acto necesario, no egoísta.",
+        "Tomarte pausas no es perder tiempo; es cuidar tu salud emocional."
+    ],
+    "Soledad": [
+        "La soledad puede sentirse como un vacío difícil de explicar. Gracias por compartirlo.",
+        "¿Qué tipo de compañía sientes que necesitas: emocional, física, espiritual?",
+        "¿Hay alguna actividad que te conecte contigo y te haga sentir menos solo?",
+        "¿Has considerado escribirle a alguien con quien no hablas hace tiempo?",
+        "Conectar con otros lleva tiempo, and está bien tomarse ese proceso con calma.",
+        "¿Te gustaría imaginar cómo sería un vínculo que te dé contención?",
+        "A veces estar acompañado por alguien no significa dejar de sentir soledad. ¿Lo has sentido?",
+        "¿Qué podrías hacer hoy que te haga sentir parte de algo, aunque sea pequeño?",
+        "¿Hay alguna comunidad o espacio que quisieras explorar?",
+        "Recuerda que mereces sentirte valorado y escuchado."
+    ],
+    "Miedo": [
+        "El miedo es una emoción natural que nos protege, pero no debe paralizarnos.",
+        "¿Puedes identificar qué te provoca miedo exactamente?",
+        "Hablar de tus miedos puede ayudarte to entenderlos mejor.",
+        "¿Cómo reaccionas cuando el miedo aparece?",
+        "Enfrentar poco a poco esos miedos puede disminuir su poder.",
+        "¿Has probado técnicas de relajación cuando sientes miedo?",
+        "Compartir lo que sientes puede aliviar la carga emocional.",
+        "¿Sientes que el miedo limita tu vida o tus decisiones?",
+        "La valentía no es ausencia de miedo, sino actuar a pesar de él.",
+        "Si el miedo persiste, buscar ayuda profesional es una buena opción."
+    ],
+    "Culpa": [
+        "Sentir culpa puede ser agotador. ¿Qué parte de ti necesita ser perdonada?",
+        "¿Eres igual de duro contigo que lo serías con alguien que amas?",
+        "¿La culpa viene de una expectativa tuya or de los demás?",
+        "Podemos aprender de lo que pasó sin cargarlo como un castigo eterno.",
+        "Todos cometemos errores. La clave está en lo que haces con eso ahora.",
+        "¿Hay algo que puedas hacer para reparar or aliviar esa carga?",
+        "A veces la culpa no es real, sino impuesta. ¿De quién es esa voz interna?",
+        "Eres humano. Equivocarte no te hace menos valioso.",
+        "¿Qué le dirías a un amigo if estuviera en tu lugar?",
+        "Reconocer lo que sientes es el primer paso hacia la liberación emocional."
+    ],
+    "Inseguridad": [
+        "La inseguridad puede afectar muchas áreas de tu vida.",
+        "¿En qué situaciones te sientes más inseguro?",
+        "Hablar de tus inseguridades es un buen paso para superarlas.",
+        "¿Qué cualidades positivas reconoces en ti mismo?",
+        "Reconocer tus fortalezas puede ayudarte a aumentar tu confianza.",
+        "¿Has probado ejercicios para mejorar tu autoestima?",
+        "¿Cómo afecta la inseguridad tus relaciones con otros?",
+        "Es normal sentir inseguridad, pero no define quién eres.",
+        "¿Tienes alguien de confianza para hablar sobre esto?",
+        "Buscar apoyo puede ayudarte a fortalecer tu confianza.",
+    ],
+    "Enojo": [
+        "El enojo es una emoción válida, es bueno expresarlo.",
+        "¿Qué situaciones suelen generar tu enojo?",
+        "¿Cómo sueles manejar tu enojo cuando aparece?",
+        "Hablar sobre lo que te molesta puede ayudarte a calmarte.",
+        "¿Has probado técnicas para controlar la ira o relajarte?",
+        "Reconcer tu enojo es el primer paso para gestionarlo.",
+        "¿Cómo afecta el enojo tus relaciones personales?",
+        "¿Tienes alguien con quien puedas hablar cuando estás enojado?",
+        "Expresar el enojo de forma saludable es importante.",
+        "¿Qué cosas te ayudan a calmarte cuando estás molesto?",
+        "¿Has notado si el enojo se relaciona con otras emociones?",
+        "Buscar apoyo puede facilitar manejar mejor el enojo.",
+        "¿Quieres contarme alguna experiencia reciente que te haya enojado?",
+        "Practicar la empatía puede ayudarte a manejar el enojo.",
+        "Si el enojo es muy frecuente, considera hablar con un especialista."
+    ],
+    "Agotamiento emocional": [
+        "El agotamiento emocional puede afectar tu energía y ánimo.",
+        "¿Qué cosas te están causando más cansancio emocional?",
+        "Es importante que te des tiempo para descansar y recargar.",
+        "Hablar de cómo te sientes puede aliviar parte del agotamiento.",
+        "¿Has intentado actividades que te ayuden a relajarte?",
+        "Reconocer el agotamiento es clave para cuidarte mejor.",
+        "¿Sientes que el agotamiento afecta tu vida diaria?",
+        "¿Tienes apoyo para compartir lo que estás viviendo?",
+        "El autocuidado es fundamental para superar el agotamiento.",
+        "¿Qué cosas te gustaría cambiar para sentirte con más energía?",
+        "Es válido pedir ayuda cuando te sientes muy cansado/a.",
+        "¿Quieres contarme cómo has estado manejando este cansancio?",
+        "Tomar pausas durante el día puede ayudarte a recuperar energías.",
+        "Recuerda que cuidar de ti es una prioridad.",
+        "If el agotamiento persiste, considera consultar con un profesional."
+    ],
+    "Falta de motivación": [
+        "La falta de motivación puede ser difícil, pero es temporal.",
+        "¿Qué cosas te gustaría lograr si tuvieras más energía?",
+        "Hablar de tus sentimientos puede ayudarte a encontrar motivación.",
+        "¿Has identificado qué te quita las ganas de hacer cosas?",
+        "Pequeños pasos pueden ayudarte a recuperar la motivación.",
+        "¿Tienes alguien que te apoye en tus metas?",
+        "Reconocer la falta de motivación es el primer paso para cambiar.",
+        "¿Qué actividades solías disfrutar y ahora te cuestan más?",
+        "Es normal tener altibajos en la motivación, sé paciente.",
+        "¿Quieres contarme cómo te sientes al respecto?",
+        "Buscar apoyo puede facilitar que recuperes el interés.",
+        "¿Hay obstáculos que te impiden avanzar?",
+        "Celebrar pequeños logros puede aumentar tu motivación.",
+        "¿Has probado cambiar tu rutina para sentirte mejor?",
+        "Si la falta de motivación es persistente, considera ayuda profesional."
+    ],
+    "Problemas de sueño": [
+        "Dormir bien es fundamental para tu bienestar general.",
+        "¿Qué dificultades tienes para conciliar o mantener el sueño?",
+        "Crear una rutina antes de dormir puede ayudarte a descansar mejor.",
+        "Evitar pantallas antes de dormir puede mejorar la calidad del sueño.",
+        "¿Has probado técnicas de relajación para dormir mejor?",
+        "Reconocer el problema es importante para buscar soluciones.",
+        "¿Sientes que el sueño insuficiente afecta tu ánimo o concentración?",
+        "¿Tienes hábitos que podrían estar interfiriendo con tu descanso?",
+        "Hablar de tus preocupaciones puede facilitar dormir mejor.",
+        "¿Quieres contarme cómo es tu rutina de sueño actual?",
+        "El ejercicio regular puede ayudar a mejorar el sueño.",
+        "Evitar cafeína o comidas pesadas antes de dormir es recomendable.",
+        "¿Has tenido episodios de insomnio prolongados?",
+        "Si los problemas de sueño persisten, un especialista puede ayudar.",
+        "Cuidar el ambiente donde duermes es clave para un buen descanso."
+    ],
+    "Dolor corporal": [
+        "El dolor puede afectar mucho tu calidad de vida, es importante escucharlo.",
+        "¿Dónde sientes más el dolor y cómo describirías su intensidad?",
+        "Hablar sobre el dolor puede ayudarte a entenderlo mejor.",
+        "¿Has probado técnicas de relajación or estiramientos suaves?",
+        "El estrés puede influir en la percepción del dolor.",
+        "¿Has consultado a un profesional sobre este dolor?",
+        "Cuidar tu postura puede ayudar a disminuir molestias físicas.",
+        "¿El dolor afecta tus actividades diarias?",
+        "¿Sientes que hay momentos del día en que el dolor empeora?",
+        "Es válido buscar ayuda médica y psicológica para el dolor crónico.",
+        "¿Quieres contarme cómo te afecta emocionalmente el dolor?",
+        "La conexión cuerpo-mente es importante para el bienestar general.",
+        "¿Has probado terapias complementarias, como masajes o yoga?",
+        "Escuchar a tu body es clave para cuidarte mejor.",
+        "Si el dolor es constante, no dudes en buscar apoyo especializado."
+    ],
+    "Preocupación excesiva": [
+        "Preocuparse es normal, pero en exceso puede afectar tu vida.",
+        "¿Qué pensamientos recurrentes te generas más preocupación?",
+        "Hablar de tus preocupaciones puede aliviar su peso.",
+        "¿Has probado técnicas para distraer tu mente or relajarte?",
+        "Reconcer la preocupación es el primer paso para manejarla.",
+        "¿Sientes que la preocupación afecta tu sueño o ánimo?",
+        "¿Tienes alguien con quien puedas compartir lo que te preocupa?",
+        "Aprender a diferenciar lo que puedes controlar ayuda a reducir el estrés.",
+        "¿Quieres contarme qué te gustaría cambiar respecto a tus preocupaciones?",
+        "Buscar apoyo puede facilitar encontrar soluciones efectivas.",
+        "¿Has intentado escribir tus pensamientos para entenderlos mejor?",
+        "La práctica de mindfulness puede ayudar a reducir la preocupación.",
+        "¿Sientes que la preocupación interfiere en tus actividades diarias?",
+        "Es válido pedir ayuda si las preocupaciones son muy intensas.",
+        "Recuerda que tu bienestar es importante and hay caminos para mejorar."
+    ],
+    "Cambios de humor": [
+        "Los cambios de humor pueden ser difíciles de manejar.",
+        "¿Puedes identificar qué situaciones disparan esos cambios?",
+        "Hablar de tus emociones puede ayudarte a entenderlas mejor.",
+        "¿Has notado patrones en tus cambios de humor?",
+        "Reconocer tus sentimientos es un paso para gestionarlos.",
+        "¿Tienes alguien con quien puedas compartir cómo te sientes?",
+        "¿Cómo afectan esos cambios tu vida diaria y relaciones?",
+        "Es importante cuidar de tu salud emocional constantemente.",
+        "¿Quieres contarme cómo te sientes en los momentos más estables?",
+        "Buscar apoyo puede facilitar manejar los cambios emocionales.",       
+    ],
+    "Apatía": [
+        "Sentir apatía puede hacer que todo parezca sin sentido.",
+        "¿Quieres contarme qué cosas te generan menos interés ahora?",
+        "Hablar de lo que sientes puede ayudarte a reconectar contigo.",
+        "¿Has notado si la apatía está relacionada con otras emociones?",
+        "Reconocerla es importante para buscar formas de superarla.",
+        "¿Tienes alguien con quien puedas compartir tus sentimientos?",
+        "Pequeños cambios en tu rutina pueden ayudar a mejorar.",
+        "¿Qué cosas te gustaría recuperar or volver a disfrutar?",
+        "Es normal tener momentos bajos, sé paciente contigo mismo.",
+        "¿Quieres contarme cómo te sientes en general últimamente?",
+        "Buscar apoyo puede facilitar que recuperes energía e interés.",
+        "¿Has probado actividades nuevas o diferentes para motivarte?",
+        "Recuerda que mereces cuidado y atención a tus emociones.",
+        "Si la apatía persiste, considera hablar con un profesional.",
+        "Tu bienestar es importante and hay caminos para mejorar."
+    ],
+    "Sensación de vacío": [
+        "Sentir vacío puede ser muy desconcertante, gracias por compartirlo.",
+        "¿Quieres contarme cuándo empezaste a sentir ese vacío?",
+        "Hablar sobre ello puede ayudarte a entender mejor tus emociones.",
+        "¿Hay momentos en que ese vacío se hace más presente?",
+        "Reconocer este sentimiento es un primer paso para manejarlo.",
+        "¿Tienes alguien con quien puedas compartir cómo te sientes?",
+        "A veces, el vacío puede indicar que necesitas cambios en tu vida.",
+        "¿Qué cosas te hacían sentir pleno o feliz antes?",
+        "Es válido buscar ayuda para reconectar contigo mismo.",
+        "¿Quieres contarme cómo es tu día a día con esta sensación?",
+        "Explorar tus emociones puede ayudarte a llenar ese vacío.",
+        "Recuerda que mereces sentirte bien y en paz interiormente.",
+        "¿Has probado actividades que te conecten con tus intereses?",
+        "Si este sentimiento persiste, un especialista puede apoyarte.",
+        "Estoy aquí para escucharte y acompañarte en este proceso."
+    ],
+    "Pensamientos negativos": [
+        "Los pensamientos negativos pueden ser muy pesados.",
+        "¿Puedes contarme qué tipo de pensamientos recurrentes tienes?",
+        "Hablar sobre ellos puede ayudarte a liberarte un poco.",
+        "Reconcer estos pensamientos es el primer paso para manejarlos.",
+        "¿Sientes que afectan cómo te ves a ti mismo o a los demás?",
+        "¿Has probado técnicas para reemplazarlos por otros más positivos?",
+        "Es normal tener pensamientos negativos, pero no define quién eres.",
+        "¿Tienes alguien con quien puedas compartir tus inquietudes?",
+        "Buscar apoyo puede facilitar encontrar formas de manejarlos.",
+        "¿Quieres contarme cuándo suelen aparecer esos pensamientos?",
+        "Practicar la autocompasión es importante para tu bienestar.",
+        "¿Cómo afectan esos pensamientos tu vida diaria?",
+        "Si los pensamientos son muy intensos, considera ayuda profesional.",
+        "Recuerda que mereces paz mental y emocional.",
+        "Estoy aquí para escucharte y apoyarte en este camino."
+    ],
+    "Llanto frecuente": [
+        "Llorar es una forma natural de liberar emociones contenidas.",
+        "¿Sientes que lloras sin saber exactamente por qué?",
+        "No estás solo/a. Muchas personas pasan por esto más seguido de lo que imaginas.",
+        "¿Qué suele pasar antes de que sientas ganas de llorar?",
+        "Tu llanto también es una voz que pide ser escuchada.",
+        "¿Hay algo que estés conteniendo desde hace tiempo?",
+        "¿Después de llorar sientes alivio o más angustia?",
+        "No te juzgues por expresar tu dolor. Es válido y humano.",
+        "¿Has tenido un espacio seguro donde simplemente puedas llorar y ser escuchado?",
+        "Tus lágrimas tienen un motivo. ¿Te gustaría explorar cuál es?"
+    ],
+    "Dificultad para concentrarse": [
+        "La concentración puede verse afectada por muchos factores.",
+        "¿Quieres contarme cuándo notas más esta dificultad?",
+        "Hablar de lo que te distrae puede ayudarte a mejorar tu foco.",
+        "Reconcer el problema es importante para buscar soluciones.",
+        "¿Sientes que tu mente está muy dispersa o cansada?",
+        "¿Has probado técnicas como pausas cortas or ambientes tranquilos?",
+        "El estrés y la ansiedad pueden influir en la concentración.",
+        "¿Tienes alguien con quien puedas compartir cómo te sientes?",
+        "Buscar apoyo puede facilitar que mejores tu atención.",
+        "¿Quieres contarme cómo afecta esta dificultad tu día a día?",
+        "Practicar ejercicios mentales puede ayudarte a fortalecer el foco.",
+        "¿Has intentado organizar tus tareas para facilitar la concentración?",
+        "Si esta dificultad es persistente, considera ayuda profesional.",
+        "Recuerda que mereces sentirte capaz y enfocado.",
+        "Estoy aquí para escucharte y apoyarte en este proceso."
+    ],
+    "Desesperanza": [
+        "Sentir desesperanza es muy difícil, gracias por compartir.",
+        "¿Quieres contarme qué te hace sentir así últimamente?",
+        "Hablar sobre ello puede ayudarte a encontrar luz en la oscuridad.",
+        "Reconocer esos sentimientos es el primer paso para salir adelante.",
+        "¿Tienes alguien con quien puedas compartir lo que sientes?",
+        "Es válido pedir ayuda cuando sientes que la esperanza falta.",
+        "¿Qué cosas te han dado un poco de alivio en momentos difíciles?",
+        "Recuerda que mereces apoyo y cuidado en estos momentos.",
+        "¿Quieres contarme cómo te imaginas un futuro mejor?",
+        "Buscar ayuda profesional puede ser muy beneficioso ahora.",
+        "¿Has intentado actividades que te ayuden a sentir esperanza?",
+        "No estás solo/a, y hay caminos para sentirte mejor.",
+        "¿Quieres que te comparta recursos or estrategias para esto?",
+        "Estoy aquí para escucharte y acompañarte siempre.",
+        "La esperanza puede volver, paso a paso y con apoyo."
+    ],
+    "Tensión muscular": [
+        "La tensión muscular puede ser síntoma de estrés or ansiedad.",
+        "¿En qué partes de tu cuerpo sientes más tensión?",
+        "Probar estiramientos suaves puede ayudarte to aliviar la tensión.",
+        "¿Has intentado técnicas de relajación o respiración profunda?",
+        "Hablar de tu estado puede ayudarte a identificar causas.",
+        "¿Sientes que la tensión afecta tu movilidad or bienestar?",
+        "El descanso y una buena postura son importantes para el cuerpo.",
+        "¿Tienes alguien con quien puedas compartir cómo te sientes?",
+        "Buscar apoyo puede facilitar aliviar la tensión muscular.",
+        "¿Quieres contarme cuándo notas más esa tensión?",
+        "La conexión mente-cuerpo es clave para tu bienestar.",
+        "Considera actividades como yoga o masajes para relajarte.",
+        "If la tensión persiste, un profesional puede ayudarte.",
+        "Recuerda que cuidar de tu cuerpo es parte del autocuidado.",
+        "Estoy aquí para apoyarte y escucharte siempre."
+    ],
+    "Taquicardia": [
+        "La taquicardia puede ser alarmante, es bueno que hables de ello.",
+        "¿Cuándo has notado que se acelera tu corazón?",
+        "¿Sientes que la taquicardia está relacionada con el estrés o ansiedad?",
+        "Es importante que consultes con un médico para evaluar tu salud.",
+        "¿Has probado técnicas de respiración para calmarte?",
+        "Hablar de lo que sientes puede ayudarte a manejar la ansiedad.",
+        "¿Sientes otros síntomas junto con la taquicardia?",
+        "¿Tienes alguien con quien puedas compartir estas experiencias?",
+        "Buscar apoyo profesional es clave para cuidar tu salud.",
+        "¿Quieres contarme cómo te sientes cuando ocurre esto?",
+        "La información y la atención médica son fundamentales.",
+        "Recuerda que mereces cuidado y atención constante.",
+        "¿Has evitado situaciones que crees que la provocan?",
+        "If la taquicardia persiste, no dudes en buscar ayuda urgente.",
+        "Estoy aquí para escucharte y acompañarte."
+    ],
+    "Dificultad para respirar": [
+        "La dificultad para respirar puede ser muy angustiante.",
+        "¿Cuándo sueles sentir que te falta el aire?",
+        "Probar respiraciones lentas y profundas puede ayudar momentáneamente.",
+        "Es fundamental que consultes con un profesional de salud.",
+        "¿Sientes que la dificultad está relacionada con ansiedad or estrés?",
+        "Hablar de lo que experimentas puede ayudarte a manejarlo.",
+        "¿Tienes alguien con quien puedas compartir estas sensaciones?",
+        "Buscar ayuda médica es muy importante en estos casos.",
+        "¿Quieres contarme cómo te afecta esta dificultad en tu vida?",
+        "Recuerda que tu salud es prioridad y merece atención inmediata.",
+        "¿Has evitado situaciones que aumentan la dificultad para respirar?",
+        "Mantener la calma puede ayudarte a controlar la respiración.",
+        "If la dificultad es constante, acude a un especialista pronto.",
+        "Estoy aquí para escucharte y apoyarte.",
+        "No estás solo/a, y hay ayuda para ti."
+    ],
+    "Problemas de alimentación": [
+        "Los problemas de alimentación pueden afectar tu salud integral.",
+        "¿Quieres contarme qué dificultades estás experimentando?",
+        "Hablar de tus hábitos puede ayudarte a entender mejor la situación.",
+        "Reconocer el problema es el primer paso para buscar soluciones.",
+        "¿Sientes que tu relación con la comida ha cambiado?",
+        "¿Has notado si comes menos, más o de forma irregular?",
+        "Buscar apoyo puede facilitar que mejores tus hábitos alimenticios.",
+        "¿Tienes alguien con quien puedas compartir tus sentimientos?",
+        "El cuidado nutricional es importante para tu bienestar general.",
+        "¿Quieres contarme cómo te sientes emocionalmente respecto a la comida?",
+        "Pequeños cambios pueden hacer una gran diferencia.",
+        "Si los problemas persisten, considera ayuda profesional.",
+        "Recuerda que mereces cuidar tu cuerpo y mente.",
+        "Estoy aquí para escucharte y acompañarte en esto.",
+        "Buscar ayuda es un acto de valentía y cuidado personal."
+    ],
+    "Pensamientos intrusivos": [
+        "Los pensamientos intrusivos pueden ser muy molestos.",
+        "¿Quieres contarme qué tipo de pensamientos te molestan?",
+        "Hablar sobre ellos puede ayudarte a reducir su impacto.",
+        "Reconcerlos es un paso para poder manejarlos mejor.",
+        "¿Sientes que afectan tu día a día o tu bienestar?",
+        "¿Has probado técnicas para distraer tu mente o relajarte?",
+        "Buscar apoyo puede facilitar que encuentres estrategias útiles.",
+        "¿Tienes alguien con quien puedas compartir estas experiencias?",
+        "¿Quieres contarme cuándo suelen aparecer estos pensamientos?",
+        "Practicar mindfulness puede ayudarte a observar sin juzgar.",
+        "Es normal tener pensamientos intrusivos, no te defines por ellos.",
+        "Si son muy intensos, considera ayuda profesional.",
+        "Recuerda que mereces paz mental y emocional.",
+        "Estoy aquí para escucharte y apoyarte en este camino.",
+        "Hablar y compartir puede ser parte de tu sanación."
+    ],
+    "Problemas familiares": [
+        "Las relaciones familiares pueden ser complejas, es válido sentirte así.",
+        "¿Quieres contarme qué tipo de conflicto estás viviendo en casa?",
+        "A veces, expresar lo que sientes puede aliviar tensiones con tus seres queridos.",
+        "¿Sientes que te entienden en tu entorno familiar?",
+        "Hablar de los problemas familiares es un paso para encontrar soluciones.",
+        "¿Qué te gustaría que cambiara en tu relación con tu familia?",
+        "Recuerda que cuidar tu bienestar emocional también es importante en medio de conflictos.",
+        "¿Tienes algún familiar con quien puedas hablar con confianza?",
+        "Establecer límites sanos puede ayudarte a sentirte mejor.",
+        "Si el ambiente familiar te genera malestar constante, es válido buscar apoyo externo.",
+        "¿Has intentado dialogar con alguien de tu familia recientemente?",
+        "No estás solo/a, muchos pasamos por conflictos similares.",
+        "¿Quieres contarme cómo ha sido tu experiencia en tu hogar últimamente?",
+        "Reconocer el problema es un paso importante para tu sanación.",
+        "Si sientes que no puedes manejarlo solo/a, un profesional puede ayudarte."
+    ],
+    "Problemas de pareja": [
+        "Las relaciones tienen altibajos, es válido buscar apoyo.",
+        "¿Quieres contarme qué pasa con tu pareja?",
+        "Expresar tus emociones puede ayudarte a entender mejor.",
+        "¿Sientes que la relación te afecta emocionalmente?",
+        "Los conflictos son comunes, pero mereces sentirte escuchado.",
+        "¿Qué te gustaría mejorar en la relación?",
+        "El respeto mutuo es clave.",
+        "¿Tienes alguien para hablar cuando se complica la relación?",
+        "Pedir ayuda es sano cuando cargas mucho emocionalmente.",
+        "Hablar con un profesional puede aclarar tus sentimientos."
+    ]
 }
 
 class SistemaConversacional:
@@ -535,12 +918,11 @@ def get_calendar_service():
     try:
         google_credentials = os.getenv('GOOGLE_CREDENTIALS')
         if not google_credentials:
-            app.logger.error("GOOGLE_CREDENTIALS no configuradas")
+            app.logger.error("❌ GOOGLE_CREDENTIALS no configuradas")
             return None
         
-        # Limpiar posibles espacios extras
+        # Limpiar y verificar credenciales
         google_credentials = google_credentials.strip()
-        
         app.logger.info(f"Longitud de credenciales: {len(google_credentials)}")
         
         try:
@@ -548,29 +930,29 @@ def get_calendar_service():
             app.logger.info("✅ Credenciales JSON parseadas correctamente")
         except json.JSONDecodeError as e:
             app.logger.error(f"❌ Error parseando JSON: {e}")
-            # Mostrar dónde está el error
-            app.logger.error(f"Error alrededor del carácter: {e.pos}")
-            app.logger.error(f"Texto alrededor: ...{google_credentials[max(0,e.pos-50):e.pos+50]}...")
+            app.logger.error(f"Primeros 100 caracteres: {google_credentials[:100]}")
             return None
             
         # Verificar campos requeridos
         required_fields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email']
-        for field in required_fields:
-            if field not in creds_dict:
-                app.logger.error(f"❌ Campo requerido faltante: {field}")
-                return None
+        missing_fields = [field for field in required_fields if field not in creds_dict]
         
+        if missing_fields:
+            app.logger.error(f"❌ Campos faltantes: {missing_fields}")
+            return None
+        
+        # Crear credenciales
         creds = service_account.Credentials.from_service_account_info(
             creds_dict,
             scopes=['https://www.googleapis.com/auth/calendar']
         )
         
-        service = build('calendar', 'v3', credentials=creds)
+        service = build('calendar', 'v3', credentials=creds, cache_discovery=False)
         app.logger.info("✅ Servicio de calendario creado exitosamente")
         return service
         
     except Exception as e:
-        app.logger.error(f"Error al obtener servicio de calendario: {e}")
+        app.logger.error(f"❌ Error al obtener servicio de calendario: {e}")
         return None
 
 def crear_evento_calendar(fecha, hora, telefono, sintoma):
@@ -641,33 +1023,48 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
     password = os.getenv("EMAIL_PASSWORD")
     
     if not remitente or not password:
-        app.logger.error("Credenciales de email no configuradas")
+        app.logger.error("❌ Credenciales de email no configuradas")
         return False
     
-    mensaje = MIMEMultipart()
-    mensaje['From'] = remitente
-    mensaje['To'] = destinatario
-    mensaje['Subject'] = f"Nueva cita agendada - {fecha} {hora}"
-    
-    cuerpo = f"""
-    📅 Nueva cita agendada:
-    Fecha: {fecha}
-    Hora: {hora}
-    Teléfono: {telefono}
-    Síntoma principal: {sintoma}
-    
-    Nueva cita agendada.
-    """
-    mensaje.attach(MIMEText(cuerpo, 'plain'))
-    
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        mensaje = MIMEMultipart()
+        mensaje['From'] = remitente
+        mensaje['To'] = destinatario
+        mensaje['Subject'] = f"✅ Nueva cita agendada - {fecha} {hora}"
+        
+        cuerpo = f"""
+        📅 NUEVA CITA AGENDADA - EQUILIBRA
+        
+        Fecha: {fecha}
+        Hora: {hora}
+        Teléfono: {telefono}
+        Síntoma principal: {sintoma}
+        
+        La cita ha sido registrada exitosamente en el calendario.
+        Por favor contacta al paciente para confirmar los detalles.
+        
+        Saludos,
+        Equilibra - Sistema de Citas Psicológicas
+        """
+        
+        mensaje.attach(MIMEText(cuerpo, 'plain'))
+        
+        # Configuración mejorada para Gmail
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
             server.login(remitente, password)
             server.send_message(mensaje)
-        app.logger.info(f"Correo de confirmación enviado a {destinatario}")
+        
+        app.logger.info(f"✅ Correo enviado exitosamente a {destinatario}")
         return True
+        
+    except smtplib.SMTPAuthenticationError:
+        app.logger.error("❌ Error de autenticación con Gmail. Verifica usuario y contraseña de aplicación.")
+        return False
+    except smtplib.SMTPException as e:
+        app.logger.error(f"❌ Error SMTP: {e}")
+        return False
     except Exception as e:
-        app.logger.error(f"Error enviando correo: {e}")
+        app.logger.error(f"❌ Error inesperado enviando correo: {e}")
         return False
 
 def limpiar_datos_aprendizaje():
@@ -773,6 +1170,52 @@ def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
     except Exception as e:
         app.logger.error(f"Error en verificación atómica: {e}")
         return {"disponible": False, "error": str(e)}
+
+# Endpoints de diagnóstico
+@app.route('/debug-env')
+def debug_env():
+    """Verificar variables de entorno"""
+    env_vars = {
+        'GOOGLE_CREDENTIALS_SET': bool(os.getenv('GOOGLE_CREDENTIALS')),
+        'GOOGLE_CREDENTIALS_LENGTH': len(os.getenv('GOOGLE_CREDENTIALS', '')),
+        'GROQ_API_KEY_SET': bool(os.getenv('GROQ_API_KEY')),
+        'EMAIL_USER_SET': bool(os.getenv('EMAIL_USER')),
+        'FLASK_ENV': os.getenv('FLASK_ENV')
+    }
+    return jsonify(env_vars)
+
+@app.route('/test-calendar-connection')
+def test_calendar_connection():
+    """Probar conexión con Google Calendar"""
+    try:
+        service = get_calendar_service()
+        if not service:
+            return jsonify({"error": "No se pudo crear el servicio"})
+        
+        # Probar listar calendarios
+        calendars = service.calendarList().list().execute()
+        
+        # Probar crear y eliminar evento de prueba
+        test_event = {
+            'summary': 'Test Connection - DELETE',
+            'start': {'dateTime': '2025-01-01T10:00:00-05:00', 'timeZone': 'America/Guayaquil'},
+            'end': {'dateTime': '2025-01-01T11:00:00-05:00', 'timeZone': 'America/Guayaquil'},
+        }
+        
+        created_event = service.events().insert(calendarId='primary', body=test_event).execute()
+        event_id = created_event['id']
+        
+        # Eliminar evento de prueba
+        service.events().delete(calendarId='primary', eventId=event_id).execute()
+        
+        return jsonify({
+            "status": "success",
+            "calendars": len(calendars.get('items', [])),
+            "message": "✅ Conexión exitosa con Google Calendar"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # Iniciar hilos de limpieza solo si no estamos en entorno de testing
 if os.environ.get('FLASK_ENV') == 'production' and not os.environ.get('TESTING'):
@@ -902,20 +1345,20 @@ def index():
                             )
 
                             if evento_url:
-                                if enviar_correo_confirmacion(
+                                # Intentar enviar email pero no bloquear si falla
+                                email_enviado = enviar_correo_confirmacion(
                                     os.getenv("PSICOLOGO_EMAIL"),
                                     cita["fecha"],
                                     cita["hora"],
                                     cita["telefono"],
                                     session["sintoma_actual"]
-                                ):
-                                    mensaje = (
-                                        f"✅ Cita confirmada para {cita['fecha']} a las {cita['hora']}. " 
-                                        "Recibirás una llamada para coordinar tu consulta. " 
-                                        "¡Gracias por confiar en nosotros!"
-                                    )
-                                else:
-                                    mensaje = "✅ Cita registrada (pero error al notificar al profesional)"
+                                )
+                                
+                                mensaje = (
+                                    f"✅ Cita confirmada para {cita['fecha']} a las {cita['hora']}. " 
+                                    f"Recibirás una llamada al {cita['telefono']} para coordinar tu consulta. " 
+                                    "¡Gracias por confiar en Equilibra!"
+                                )
 
                                 conversacion.agregar_interaccion('bot', mensaje, None)
                                 session["estado"] = "fin"
@@ -989,46 +1432,45 @@ def verificar_horario():
         fecha = data['fecha']
         hora = data['hora']
         
-        # Validar formato de fecha y hora
+        app.logger.info(f"🔍 Verificando horario: {fecha} {hora}")
+        
+        # Validación básica primero
         try:
             datetime.strptime(fecha, "%Y-%m-%d")
             datetime.strptime(hora, "%H:%M")
         except ValueError:
             return jsonify({"error": "Formato de fecha u hora inválido"}), 400
         
-        cache_key = f"{fecha}_{hora}"
-        current_time = time.time()
-        
-        with cache_lock:
-            if cache_key in horarios_cache:
-                cache_time, cached_result = horarios_cache[cache_key]
-                if current_time - cache_time < 30:  # 30 segundos de cache
-                    app.logger.info(f"Usando cache para {cache_key}")
-                    return jsonify(cached_result)
-        
+        # Verificar servicio de calendario primero
         service = get_calendar_service()
         if not service:
-            app.logger.error("Servicio de calendario no disponible")
-            return jsonify({"error": "Servicio de calendario no disponible"}), 500
-            
-        # VERIFICACIÓN ESTRICTA - Buscar eventos que se superpongan
+            app.logger.error("❌ Servicio de calendario no disponible")
+            return jsonify({"disponible": False, "error": "Servicio no disponible"})
+        
+        # Verificación estricta
         start_time = f"{fecha}T{hora}:00-05:00"
         end_time = f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00"
         
-        # Buscar eventos en un rango más amplio para detectar superposiciones
         time_min = f"{fecha}T00:00:00-05:00"
         time_max = f"{fecha}T23:59:59-05:00"
         
-        eventos = service.events().list(
-            calendarId='primary',
-            timeMin=time_min,
-            timeMax=time_max,
-            singleEvents=True,
-            maxResults=50,
-            orderBy='startTime'
-        ).execute()
+        try:
+            eventos = service.events().list(
+                calendarId='primary',
+                timeMin=time_min,
+                timeMax=time_max,
+                singleEvents=True,
+                maxResults=50,
+                orderBy='startTime'
+            ).execute()
+            
+            app.logger.info(f"📅 Eventos encontrados: {len(eventos.get('items', []))}")
+            
+        except Exception as e:
+            app.logger.error(f"❌ Error al listar eventos: {e}")
+            return jsonify({"disponible": False, "error": "Error al verificar calendario"})
         
-        # Verificar si hay eventos que se superpongan con el horario solicitado
+        # Verificar superposición
         disponible = True
         hora_solicitada_start = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
         hora_solicitada_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
@@ -1054,12 +1496,6 @@ def verificar_horario():
                 continue
         
         app.logger.info(f"Horario {fecha} {hora}: {'✅ DISPONIBLE' if disponible else '❌ OCUPADO'}")
-        
-        with cache_lock:
-            horarios_cache[cache_key] = (current_time, {
-                "disponible": disponible,
-                "timestamp": current_time
-            })
         
         return jsonify({"disponible": disponible})
         
@@ -1135,15 +1571,14 @@ def agendar_cita():
         if not evento_url:
             return jsonify({"error": "Error al crear la cita en el calendario"}), 500
             
-        # 5. Enviar correo de confirmación
-        if not enviar_correo_confirmacion(
+        # 5. Enviar correo de confirmación (no bloqueante)
+        enviar_correo_confirmacion(
             os.getenv("PSICOLOGO_EMAIL"),
             fecha,
             hora,
             telefono,
             sintoma
-        ):
-            app.logger.warning("Cita agendada pero error al enviar correo de confirmación")
+        )
             
         # 6. Limpiar cache para esta fecha/hora
         with cache_lock:
