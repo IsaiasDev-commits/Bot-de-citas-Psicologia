@@ -291,16 +291,83 @@ def seleccionar_modelo_groq(longitud_texto: int, complejidad_tema: str) -> str:
     else:
         return "openai/gpt-oss-20b"
 
+def formatear_respuesta_estructurada(texto: str) -> str:
+    """
+    Formatea la respuesta de la IA para separar ideas y consejos de manera clara
+    
+    Args:
+        texto: Texto de respuesta generado por la IA
+    
+    Returns:
+        str: Texto formateado con estructura mejorada
+    """
+    if not texto:
+        return texto
+    
+    # Patrones para detectar diferentes tipos de contenido
+    patrones_consejos = [
+        r'(\d+[\.\)]?\s*)',  # 1. 2) etc.
+        r'[•\-]\s*',         # • - 
+        r'Consejo\s*\d*:',   # Consejo 1:
+        r'Recomendación\s*\d*:',  # Recomendación 2:
+        r'Sugerencia\s*\d*:',     # Sugerencia 3:
+        r'💡',                # Emoji de bombilla
+        r'⭐',                # Emoji de estrella
+        r'📝',               # Emoji de notas
+    ]
+    
+    # Dividir el texto en párrafos
+    parrafos = texto.split('\n\n')
+    texto_formateado = []
+    
+    for parrafo in parrafos:
+        parrafo = parrafo.strip()
+        if not parrafo:
+            continue
+            
+        # Verificar si el párrafo contiene consejos numerados o con viñetas
+        es_lista_consejos = any(re.search(patron, parrafo) for patron in patrones_consejos)
+        
+        if es_lista_consejos:
+            # Mejorar el formato de listas
+            lineas = parrafo.split('\n')
+            for linea in lineas:
+                linea = linea.strip()
+                if linea:
+                    # Añadir emojis y formato a los consejos
+                    if re.match(r'(\d+[\.\)])', linea):
+                        linea = f"⭐ {linea}"
+                    elif re.match(r'[•\-]', linea):
+                        linea = f"💡 {linea[1:].strip() if linea.startswith('•') or linea.startswith('-') else linea}"
+                    elif 'consejo' in linea.lower() or 'recomendación' in linea.lower() or 'sugerencia' in linea.lower():
+                        linea = f"📝 {linea}"
+                    
+                    texto_formateado.append(linea)
+            texto_formateado.append("")  # Línea en blanco entre secciones
+        else:
+            # Párrafos normales
+            texto_formateado.append(parrafo)
+            texto_formateado.append("")  # Línea en blanco entre párrafos
+    
+    # Unir todo y limpiar líneas en blanco excesivas
+    resultado = '\n'.join(texto_formateado).strip()
+    
+    # Asegurar que no haya más de 2 líneas en blanco consecutivas
+    resultado = re.sub(r'\n\s*\n\s*\n+', '\n\n', resultado)
+    
+    return resultado
+
 def generar_respuesta_groq(texto: str, sintoma: str = None) -> str:
     """
     Función mejorada para generar respuestas usando Groq con selección inteligente de modelos
+    y formato estructurado
     
     Args:
         texto: Texto del usuario
         sintoma: Síntoma principal (opcional)
     
     Returns:
-        str: Respuesta generada
+        str: Respuesta generada y formateada
     """
     try:
         GROQ_API_KEY = os.getenv('GROQ_API_KEY')
@@ -314,7 +381,7 @@ def generar_respuesta_groq(texto: str, sintoma: str = None) -> str:
         complejidad = "normal"
         if detectar_crisis(texto):
             complejidad = "crisis"
-        elif len(texto) > 150 or (sintoma and sintoma in ["Ansiedad", "Depresión", "Estrés"]):
+        elif len(texto) > 150 or (sintoma and sintoma in ["Ansiedad", "Depresión", "Estrés", "Problemas familiares", "Problemas de pareja"]):
             complejidad = "complejo"
 
         # Seleccionar modelo óptimo
@@ -322,17 +389,43 @@ def generar_respuesta_groq(texto: str, sintoma: str = None) -> str:
         
         app.logger.info(f"Usando modelo Groq: {modelo} para texto de {len(texto)} caracteres, complejidad: {complejidad}")
 
-        # Prompt especializado para apoyo psicológico
+        # Prompt especializado para apoyo psicológico con formato estructurado
         system_prompt = """Eres un asistente psicológico profesional, empático y compasivo. Tu objetivo es:
 
 1. **Validar emociones**: Reconocer y validar los sentimientos del usuario
-2. **Ofrecer apoyo**: Proporcionar contención emocional inmediata
+2. **Ofrecer apoyo**: Proporcionar contención emocional inmediata  
 3. **Guiar sin diagnosticar**: Orientar sin hacer diagnósticos médicos
 4. **Fomentar autocuidado**: Sugerir técnicas de regulación emocional
 5. **Derivar cuando sea necesario**: Recomendar buscar ayuda profesional en casos graves
 
-Mantén un tono cálido, profesional y esperanzador. Evita lenguaje técnico excesivo.
-En crisis graves, recomienda contactar líneas de ayuda profesional inmediatamente."""
+**FORMATO DE RESPUESTA ESTRUCTURADO:**
+
+- **Empieza con validación emocional**: "Entiendo que..." "Es normal sentir..."
+- **Separa claramente las ideas** usando párrafos
+- **Para consejos prácticos**, usa formato de lista con:
+  • Viñetas (•) o números (1. 2. 3.)
+  • Emojis relevantes (💡, ⭐, 🌱, 🧘‍♀️, 📝)
+  • Títulos claros como "Consejos prácticos:" o "Estrategias que pueden ayudar:"
+- **Incluye preguntas reflexivas** al final para continuar la conversación
+- **Mantén un tono cálido, profesional y esperanzador**
+- **Evita lenguaje técnico excesivo**
+- **En crisis graves**, recomienda contactar líneas de ayuda profesional inmediatamente
+
+Ejemplo de formato ideal:
+
+Entiendo que estés pasando por un momento de [emoción]. Es completamente normal sentirse así cuando...
+
+💡 Algunas estrategias que pueden ayudarte:
+
+Practica la respiración profunda por 5 minutos
+
+Escribe tus pensamientos en un diario
+
+Da un corto paseo al aire libre
+
+¿Has probado alguna de estas técnicas? ¿Cómo te sientes al respecto?
+
+"""
 
         response = client.chat.completions.create(
             model=modelo,
@@ -340,23 +433,27 @@ En crisis graves, recomienda contactar líneas de ayuda profesional inmediatamen
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": texto}
             ],
-            max_tokens=500,  # Limitar longitud para mantener conversaciones fluidas
-            temperature=0.7,  # Balance entre creatividad y consistencia
+            max_tokens=600,  # Un poco más para permitir formato estructurado
+            temperature=0.7,
         )
 
-        respuesta = response.choices[0].message.content
+        respuesta_bruta = response.choices[0].message.content
+        
+        # Aplicar formato estructurado a la respuesta
+        respuesta_formateada = formatear_respuesta_estructurada(respuesta_bruta)
         
         # Log del uso del modelo
         app.logger.info(f"✅ Respuesta generada con {modelo} - Tokens: {response.usage.total_tokens if response.usage else 'N/A'}")
+        app.logger.info(f"📝 Longitud respuesta: {len(respuesta_bruta)} -> {len(respuesta_formateada)} caracteres")
         
-        return respuesta
+        return respuesta_formateada
 
     except Exception as e:
         app.logger.error(f"Error al generar respuesta con Groq: {e}")
         
         # Fallback a respuestas predefinidas en caso de error
         if detectar_crisis(texto):
-            return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 o con tu psicólogo de confianza."
+            return "⚠️ **Crisis detectada**\n\nVeo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato.\n\n📞 **Líneas de ayuda inmediata:**\n• Línea de crisis: 911\n• Tu psicólogo de confianza\n• Servicios de emergencia local\n\nNo estás solo/a, busca ayuda profesional ahora."
         
         return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
 
@@ -416,7 +513,8 @@ def detectar_crisis(texto):
         r'no\s+vale\s+la\s+pena', r'sin\s+esperanza', 
         r'quiero\s+morir', r'terminar\s+con\s+todo',
         r'me\s+quiero\s+morir', r'acabar\s+con\s+mi\s+vida',
-        r'no\s+puedo\s+más', r'estoy\s+harto(a)?', r'sin\s+sentido'
+        r'no\s+puedo\s+más', r'estoy\s+harto(a)?', r'sin\s+sentido',
+        r'despedirme', r'adios', r'no\s+aguanto', r'cansado(a)?\s+de\s+vivir'
     ]
     
     texto = texto.lower()
@@ -905,7 +1003,7 @@ class SistemaConversacional:
 
     def obtener_respuesta(self, sintoma, user_input):
         if detectar_crisis(user_input):
-            return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 o con tu psicólogo de confianza."
+            return "⚠️ **Crisis detectada**\n\nVeo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato.\n\n📞 **Líneas de ayuda inmediata:**\n• Línea de crisis: 911\n• Tu psicólogo de confianza\n• Servicios de emergencia local\n\nNo estás solo/a, busca ayuda profesional ahora."
 
         # Intentar con respuesta aprendida primero
         respuesta_aprendida = self.sistema_aprendizaje.obtener_mejor_respuesta(sintoma, user_input)
@@ -964,8 +1062,6 @@ class SistemaConversacional:
                     mensaje,
                     ultima_respuesta_bot['mensaje']
                 )
-
-# ... (el resto del código permanece igual: get_calendar_service, crear_evento_calendar, parsear_fecha_google, etc.)
 
 def get_calendar_service():
     try:
@@ -1443,19 +1539,21 @@ def index():
                                 )
                                 
                                 mensaje = (
-                                    f"✅ Cita confirmada para {cita['fecha']} a las {cita['hora']}. " 
-                                    f"Recibirás una llamada al {cita['telefono']} para coordinar tu consulta. " 
-                                    "¡Gracias por confiar en Equilibra!"
+                                    f"✅ **Cita confirmada**\n\n"
+                                    f"📅 **Fecha:** {cita['fecha']}\n"
+                                    f"⏰ **Hora:** {cita['hora']}\n"
+                                    f"📱 **Teléfono:** {cita['telefono']}\n\n"
+                                    f"Recibirás una llamada para coordinar tu consulta. ¡Gracias por confiar en Equilibra! 🌟"
                                 )
 
                                 conversacion.agregar_interaccion('bot', mensaje, None)
                                 session["estado"] = "fin"
                                 app.logger.info(f"Cita agendada exitosamente: {cita}")
                             else:
-                                conversacion.agregar_interaccion('bot', "❌ Error al agendar. Intenta nuevamente", None)
+                                conversacion.agregar_interaccion('bot', "❌ **Error al agendar**\n\nLo siento, hubo un problema al agendar tu cita. Por favor, intenta nuevamente.", None)
                                 app.logger.error(f"Error al agendar cita: {cita}")
                 else:
-                    conversacion.agregar_interaccion('bot', "⚠️ Por favor completa todos los campos requeridos.", None)
+                    conversacion.agregar_interaccion('bot', "⚠️ **Campos incompletos**\n\nPor favor completa todos los campos requeridos para agendar tu cita.", None)
                     app.logger.warning("Faltan campos en el formulario de cita")
 
         session["conversacion_data"] = conversacion.to_dict()
