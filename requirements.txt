@@ -13,3 +13,5 @@ requests==2.31.0
 waitress==2.1.2
 gunicorn==21.2.0
 blinker==1.7.0
+resend==0.8.0
+python-dateutil==2.9.0

@@ -26,6 +26,8 @@ import time
 from groq import Groq
 import html
 from typing import Tuple, Optional, List, Dict, Any
+from dateutil import parser
+import resend
 
 # Cargar variables de entorno desde .env
 load_dotenv()
@@ -266,61 +268,43 @@ class SistemaAprendizaje:
         
         return None  
 
-def generar_respuesta_llm(prompt, modelo="openai/gpt-oss-120b"):
+def generar_respuesta_groq(texto):
+    """
+    Nueva función Groq sin proxies
+    """
     try:
-        api_key = os.getenv('GROQ_API_KEY')
-        if not api_key:
+        GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+        if not GROQ_API_KEY:
             app.logger.error("GROQ_API_KEY no configurada")
-            return None
-            
-        client = Groq(api_key=api_key, timeout=30)
-        
-        completion = client.chat.completions.create(
-            model=modelo,
+            return "Lo siento, no puedo generar una respuesta en este momento."
+
+        client = Groq(api_key=GROQ_API_KEY)
+
+        response = client.chat.completions.create(
+            model="llama3-8b-8192",
             messages=[
-                {
-                    "role": "system",
-                    "content": """Eres Equilibra, un asistente psicológico empático y profesional. 
-                    Tu objetivo es ayudar a las personas a reflexionar sobre sus emociones y, 
-                    cuando sea apropiado, sugerir una cita con un psicólogo profesional.
-                    
-                    DIRECTRICES:
-                    1. Responde de manera comprensiva, breve (2-3 oraciones) y natural
-                    2. Sé empático pero profesional
-                    3. Haz preguntas abiertas para profundizar
-                    4. Valida las emociones del usuario
-                    5. Ofrece perspectivas útiles pero no des diagnósticos
-                    6. Después de 2-3 interacciones, sugiere amablemente una cita presencial
-                    7. Si el usuario menciona crisis grave, derívalo inmediatamente a ayuda profesional
-                    
-                    IMPORTANTE: NO sugieras cita si el usuario no la ha solicitado explícitamente.
-                    """
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.7,
-            max_tokens=250,
-            top_p=0.9,
-            stream=False,
-            timeout=30
+                {"role": "system", "content": "Eres un asistente psicológico amable y empático."},
+                {"role": "user", "content": texto}
+            ]
         )
-        
-        respuesta = completion.choices[0].message.content.strip()
-        
-        # Verificar si la respuesta está truncada 
-        if respuesta and (respuesta.endswith('...') or not respuesta.endswith(('.', '!', '?'))):
-            app.logger.warning(f"Respuesta posiblemente truncada: {respuesta}")
-            # Intentar con un modelo alternativo
-            return generar_respuesta_llm(prompt, modelo="llama-3.3-70b-versatile")
-        
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        app.logger.error(f"Error al generar respuesta con Groq: {e}")
+        return "Lo siento, ocurrió un problema al generar la respuesta."
+
+def generar_respuesta_llm(prompt, modelo="llama3-8b-8192"):
+    """
+    Función actualizada para usar la nueva implementación de Groq
+    """
+    try:
+        respuesta = generar_respuesta_groq(prompt)
         return respuesta
     
     except Exception as e:
-        app.logger.error(f"Error al generar respuesta con Groq: {e}")
-        return None
+        app.logger.error(f"Error al generar respuesta con LLM: {e}")
+        return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
 
 def sanitizar_input(texto):
     if not texto:
@@ -771,7 +755,7 @@ respuestas_por_sintoma = {
         "¿Has intentado dialogar con alguien de tu familia recientemente?",
         "No estás solo/a, muchos pasamos por conflictos similares.",
         "¿Quieres contarme cómo ha sido tu experiencia en tu hogar últimamente?",
-        "Reconocer el problema es un paso importante para tu sanación.",
+                "Reconocer el problema es un paso importante para tu sanación.",
         "Si sientes que no puedes manejarlo solo/a, un profesional puede ayudarte."
     ],
     "Problemas de pareja": [
@@ -835,15 +819,7 @@ class SistemaConversacional:
             IMPORTANTE: NO sugieras cita a menos que el usuario la solicite explícitamente.
             """
             
-            respuesta = generar_respuesta_llm(contexto, modelo="openai/gpt-oss-120b")
-            
-            modelos_alternativos = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
-            
-            if not respuesta or len(respuesta) < 10:
-                for modelo in modelos_alternativos:
-                    respuesta = generar_respuesta_llm(contexto, modelo=modelo)
-                    if respuesta and len(respuesta) >= 10:
-                        break
+            respuesta = generar_respuesta_llm(contexto)
             
             if respuesta and len(respuesta) > 10:
                 return respuesta
@@ -1018,6 +994,18 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
         app.logger.error(f"❌ Error inesperado al crear evento: {e}")
         return None
 
+def parsear_fecha_google(event):
+    """
+    Nueva función para parsear fechas de Google Calendar usando dateutil.parser
+    """
+    try:
+        fecha_inicio = parser.isoparse(event["start"]["dateTime"])
+        fecha_fin = parser.isoparse(event["end"]["dateTime"])
+        return fecha_inicio, fecha_fin
+    except Exception as e:
+        app.logger.error(f"Error parseando fecha de Google Calendar: {e}")
+        return None, None
+
 def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
     """
     Versión para Resend que funciona en Render
@@ -1043,8 +1031,6 @@ def enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma):
     Usar Resend API para enviar emails (funciona en Render)
     """
     try:
-        import resend
-        
         resend_api_key = os.getenv('RESEND_API_KEY')
         
         if not resend_api_key:
@@ -1054,38 +1040,40 @@ def enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma):
         # Configurar la API key de Resend
         resend.api_key = resend_api_key
         
+        mensaje = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #4CAF82; text-align: center;">📅 NUEVA CITA AGENDADA - EQUILIBRA</h2>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                <p><strong>Fecha:</strong> {fecha}</p>
+                <p><strong>Hora:</strong> {hora}</p>
+                <p><strong>Teléfono:</strong> {telefono}</p>
+                <p><strong>Síntoma principal:</strong> {sintoma}</p>
+            </div>
+            
+            <p>La cita ha sido registrada exitosamente en el calendario de Google.</p>
+            <p>Por favor contacta al paciente para confirmar los detalles.</p>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #4CAF82;">
+                <p>Saludos,<br>
+                <strong>Equilibra</strong> - Sistema de Citas Psicológicas</p>
+            </div>
+        </div>
+        """
+        
         # Enviar el email
-        r = resend.Emails.send({
+        respuesta = resend.Emails.send({
             "from": "Equilibra <onboarding@resend.dev>",
             "to": destinatario,
             "subject": f"✅ Nueva cita agendada - {fecha} {hora}",
-            "html": f"""
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #4CAF82; text-align: center;">📅 NUEVA CITA AGENDADA - EQUILIBRA</h2>
-                
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                    <p><strong>Fecha:</strong> {fecha}</p>
-                    <p><strong>Hora:</strong> {hora}</p>
-                    <p><strong>Teléfono:</strong> {telefono}</p>
-                    <p><strong>Síntoma principal:</strong> {sintoma}</p>
-                </div>
-                
-                <p>La cita ha sido registrada exitosamente en el calendario de Google.</p>
-                <p>Por favor contacta al paciente para confirmar los detalles.</p>
-                
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #4CAF82;">
-                    <p>Saludos,<br>
-                    <strong>Equilibra</strong> - Sistema de Citas Psicológicas</p>
-                </div>
-            </div>
-            """
+            "html": mensaje
         })
-        
-        app.logger.info(f"✅ Email enviado via Resend a {destinatario}")
+
+        app.logger.info(f"✅ Correo enviado correctamente via Resend: {respuesta}")
         return True
             
     except Exception as e:
-        app.logger.error(f"❌ Error con Resend: {e}")
+        app.logger.error(f"❌ Error enviando correo con Resend: {e}")
         return False
 
 def limpiar_datos_aprendizaje():
@@ -1166,9 +1154,9 @@ def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
             orderBy='startTime'
         ).execute()
         
-        # Verificar superposición estricta
-        hora_solicitada_start = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-        hora_solicitada_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+        # Verificar superposición estricta - CORREGIDO: usar parser.isoparse
+        hora_solicitada_start = parser.isoparse(start_time)
+        hora_solicitada_end = parser.isoparse(end_time)
         
         for evento in eventos.get('items', []):
             evento_start_str = evento['start'].get('dateTime', evento['start'].get('date'))
@@ -1176,12 +1164,12 @@ def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
             
             if 'T' in evento_start_str:
                 try:
-                    evento_start = datetime.fromisoformat(evento_start_str.replace('Z', '+00:00'))
-                    evento_end = datetime.fromisoformat(evento_end_str.replace('Z', '+00:00'))
-                    
-                    if (evento_start < hora_solicitada_end and evento_end > hora_solicitada_start):
-                        app.logger.warning(f"❌ Verificación atómica: Horario {hora} ocupado por {evento.get('summary', 'Sin título')}")
-                        return {"disponible": False, "error": "Horario ya ocupado"}
+                    # Usar la nueva función de parseo
+                    fecha_inicio, fecha_fin = parsear_fecha_google(evento)
+                    if fecha_inicio and fecha_fin:
+                        if (fecha_inicio < hora_solicitada_end and fecha_fin > hora_solicitada_start):
+                            app.logger.warning(f"❌ Verificación atómica: Horario {hora} ocupado por {evento.get('summary', 'Sin título')}")
+                            return {"disponible": False, "error": "Horario ya ocupado"}
                 except ValueError:
                     continue
         
@@ -1491,26 +1479,25 @@ def verificar_horario():
             app.logger.error(f"❌ Error al listar eventos: {e}")
             return jsonify({"disponible": False, "error": "Error al verificar calendario"})
         
-        # Verificar superposición
+        # Verificar superposición - CORREGIDO: usar parser.isoparse
         disponible = True
-        hora_solicitada_start = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-        hora_solicitada_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+        hora_solicitada_start = parser.isoparse(start_time)
+        hora_solicitada_end = parser.isoparse(end_time)
         
         for evento in eventos.get('items', []):
             evento_start_str = evento['start'].get('dateTime', evento['start'].get('date'))
             evento_end_str = evento['end'].get('dateTime', evento['end'].get('date'))
             
             try:
-                # Convertir tiempos del evento
+                # Convertir tiempos del evento usando la nueva función
                 if 'T' in evento_start_str:
-                    evento_start = datetime.fromisoformat(evento_start_str.replace('Z', '+00:00'))
-                    evento_end = datetime.fromisoformat(evento_end_str.replace('Z', '+00:00'))
-                    
-                    # Verificar superposición estricta
-                    if (evento_start < hora_solicitada_end and evento_end > hora_solicitada_start):
-                        app.logger.info(f"❌ Horario {hora} ocupado por evento: {evento.get('summary', 'Sin título')}")
-                        disponible = False
-                        break
+                    fecha_inicio, fecha_fin = parsear_fecha_google(evento)
+                    if fecha_inicio and fecha_fin:
+                        # Verificar superposición estricta
+                        if (fecha_inicio < hora_solicitada_end and fecha_fin > hora_solicitada_start):
+                            app.logger.info(f"❌ Horario {hora} ocupado por evento: {evento.get('summary', 'Sin título')}")
+                            disponible = False
+                            break
                         
             except ValueError as e:
                 app.logger.warning(f"Error parsing event time: {e}")
