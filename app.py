@@ -268,9 +268,39 @@ class SistemaAprendizaje:
         
         return None  
 
-def generar_respuesta_groq(texto):
+def seleccionar_modelo_groq(longitud_texto: int, complejidad_tema: str) -> str:
     """
-    Nueva función Groq sin proxies
+    Selecciona el modelo de Groq más apropiado según la situación
+    
+    Args:
+        longitud_texto: Longitud del texto del usuario
+        complejidad_tema: Complejidad del tema ('crisis', 'complejo', 'normal')
+    
+    Returns:
+        str: Nombre del modelo a usar
+    """
+    # 1. openai/gpt-oss-120b - Para situaciones complejas y respuestas de alta calidad
+    if complejidad_tema == 'crisis' or longitud_texto > 200:
+        return "openai/gpt-oss-120b"
+    
+    # 2. llama-3.1-70b-versatile - Para la mayoría de casos, equilibrado
+    elif complejidad_tema == 'complejo' or longitud_texto > 100:
+        return "llama-3.1-70b-versatile"
+    
+    # 3. openai/gpt-oss-20b - Solo para respuestas rápidas y simples
+    else:
+        return "openai/gpt-oss-20b"
+
+def generar_respuesta_groq(texto: str, sintoma: str = None) -> str:
+    """
+    Función mejorada para generar respuestas usando Groq con selección inteligente de modelos
+    
+    Args:
+        texto: Texto del usuario
+        sintoma: Síntoma principal (opcional)
+    
+    Returns:
+        str: Respuesta generada
     """
     try:
         GROQ_API_KEY = os.getenv('GROQ_API_KEY')
@@ -280,26 +310,69 @@ def generar_respuesta_groq(texto):
 
         client = Groq(api_key=GROQ_API_KEY)
 
+        # Determinar complejidad del tema
+        complejidad = "normal"
+        if detectar_crisis(texto):
+            complejidad = "crisis"
+        elif len(texto) > 150 or (sintoma and sintoma in ["Ansiedad", "Depresión", "Estrés"]):
+            complejidad = "complejo"
+
+        # Seleccionar modelo óptimo
+        modelo = seleccionar_modelo_groq(len(texto), complejidad)
+        
+        app.logger.info(f"Usando modelo Groq: {modelo} para texto de {len(texto)} caracteres, complejidad: {complejidad}")
+
+        # Prompt especializado para apoyo psicológico
+        system_prompt = """Eres un asistente psicológico profesional, empático y compasivo. Tu objetivo es:
+
+1. **Validar emociones**: Reconocer y validar los sentimientos del usuario
+2. **Ofrecer apoyo**: Proporcionar contención emocional inmediata
+3. **Guiar sin diagnosticar**: Orientar sin hacer diagnósticos médicos
+4. **Fomentar autocuidado**: Sugerir técnicas de regulación emocional
+5. **Derivar cuando sea necesario**: Recomendar buscar ayuda profesional en casos graves
+
+Mantén un tono cálido, profesional y esperanzador. Evita lenguaje técnico excesivo.
+En crisis graves, recomienda contactar líneas de ayuda profesional inmediatamente."""
+
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model=modelo,
             messages=[
-                {"role": "system", "content": "Eres un asistente psicológico amable y empático."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": texto}
-            ]
+            ],
+            max_tokens=500,  # Limitar longitud para mantener conversaciones fluidas
+            temperature=0.7,  # Balance entre creatividad y consistencia
         )
 
-        return response.choices[0].message.content
+        respuesta = response.choices[0].message.content
+        
+        # Log del uso del modelo
+        app.logger.info(f"✅ Respuesta generada con {modelo} - Tokens: {response.usage.total_tokens if response.usage else 'N/A'}")
+        
+        return respuesta
 
     except Exception as e:
         app.logger.error(f"Error al generar respuesta con Groq: {e}")
-        return "Lo siento, ocurrió un problema al generar la respuesta."
+        
+        # Fallback a respuestas predefinidas en caso de error
+        if detectar_crisis(texto):
+            return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 o con tu psicólogo de confianza."
+        
+        return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
 
-def generar_respuesta_llm(prompt, modelo="llama3-8b-8192"):
+def generar_respuesta_llm(prompt: str, sintoma: str = None) -> str:
     """
-    Función actualizada para usar la nueva implementación de Groq
+    Función actualizada para usar la implementación mejorada de Groq
+    
+    Args:
+        prompt: Prompt para el modelo
+        sintoma: Síntoma principal (opcional)
+    
+    Returns:
+        str: Respuesta generada
     """
     try:
-        respuesta = generar_respuesta_groq(prompt)
+        respuesta = generar_respuesta_groq(prompt, sintoma)
         return respuesta
     
     except Exception as e:
@@ -341,7 +414,9 @@ def detectar_crisis(texto):
         r'suicidio', r'autolesión', r'autoflagelo', r'matarme', 
         r'no\s+quiero\s+vivir', r'acabar\s+con\s+todo', 
         r'no\s+vale\s+la\s+pena', r'sin\s+esperanza', 
-        r'quiero\s+morir', r'terminar\s+con\s+todo'
+        r'quiero\s+morir', r'terminar\s+con\s+todo',
+        r'me\s+quiero\s+morir', r'acabar\s+con\s+mi\s+vida',
+        r'no\s+puedo\s+más', r'estoy\s+harto(a)?', r'sin\s+sentido'
     ]
     
     texto = texto.lower()
@@ -819,7 +894,7 @@ class SistemaConversacional:
             IMPORTANTE: NO sugieras cita a menos que el usuario la solicite explícitamente.
             """
             
-            respuesta = generar_respuesta_llm(contexto)
+            respuesta = generar_respuesta_llm(contexto, sintoma)
             
             if respuesta and len(respuesta) > 10:
                 return respuesta
@@ -830,7 +905,7 @@ class SistemaConversacional:
 
     def obtener_respuesta(self, sintoma, user_input):
         if detectar_crisis(user_input):
-            return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 or con tu psicólogo de confianza."
+            return "⚠️ Veo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato. Por favor, comunícate con la línea de crisis al 911 o con tu psicólogo de confianza."
 
         # Intentar con respuesta aprendida primero
         respuesta_aprendida = self.sistema_aprendizaje.obtener_mejor_respuesta(sintoma, user_input)
@@ -889,6 +964,8 @@ class SistemaConversacional:
                     mensaje,
                     ultima_respuesta_bot['mensaje']
                 )
+
+# ... (el resto del código permanece igual: get_calendar_service, crear_evento_calendar, parsear_fecha_google, etc.)
 
 def get_calendar_service():
     try:
