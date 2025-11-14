@@ -1019,52 +1019,73 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
         return None
 
 def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
-    remitente = os.getenv("EMAIL_USER")
-    password = os.getenv("EMAIL_PASSWORD")
-    
-    if not remitente or not password:
-        app.logger.error("❌ Credenciales de email no configuradas")
-        return False
-    
+    """
+    Versión para Resend que funciona en Render
+    """
     try:
-        mensaje = MIMEMultipart()
-        mensaje['From'] = remitente
-        mensaje['To'] = destinatario
-        mensaje['Subject'] = f"✅ Nueva cita agendada - {fecha} {hora}"
+        resend_api_key = os.getenv('RESEND_API_KEY')
         
-        cuerpo = f"""
-        📅 NUEVA CITA AGENDADA - EQUILIBRA
-        
-        Fecha: {fecha}
-        Hora: {hora}
-        Teléfono: {telefono}
-        Síntoma principal: {sintoma}
-        
-        La cita ha sido registrada exitosamente en el calendario.
-        Por favor contacta al paciente para confirmar los detalles.
-        
-        Saludos,
-        Equilibra - Sistema de Citas Psicológicas
-        """
-        
-        mensaje.attach(MIMEText(cuerpo, 'plain'))
-        
-        # Configuración mejorada para Gmail
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
-            server.login(remitente, password)
-            server.send_message(mensaje)
-        
-        app.logger.info(f"✅ Correo enviado exitosamente a {destinatario}")
-        return True
-        
-    except smtplib.SMTPAuthenticationError:
-        app.logger.error("❌ Error de autenticación con Gmail. Verifica usuario y contraseña de aplicación.")
-        return False
-    except smtplib.SMTPException as e:
-        app.logger.error(f"❌ Error SMTP: {e}")
-        return False
+        if resend_api_key:
+            # Usar Resend API
+            return enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma)
+        else:
+            # Fallback: solo loggear (no bloquear)
+            app.logger.info(f"📧 Simulando envío de email a {destinatario}")
+            app.logger.info(f"   Cita: {fecha} {hora} - Tel: {telefono} - Síntoma: {sintoma}")
+            return True
+            
     except Exception as e:
-        app.logger.error(f"❌ Error inesperado enviando correo: {e}")
+        app.logger.warning(f"⚠️ Email no enviado (pero no crítico): {e}")
+        return True  # No bloquear por error de email
+
+def enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma):
+    """
+    Usar Resend API para enviar emails (funciona en Render)
+    """
+    try:
+        import resend
+        
+        resend_api_key = os.getenv('RESEND_API_KEY')
+        
+        if not resend_api_key:
+            app.logger.warning("Credenciales de Resend no configuradas")
+            return False
+            
+        # Configurar la API key de Resend
+        resend.api_key = resend_api_key
+        
+        # Enviar el email
+        r = resend.Emails.send({
+            "from": "Equilibra <onboarding@resend.dev>",
+            "to": destinatario,
+            "subject": f"✅ Nueva cita agendada - {fecha} {hora}",
+            "html": f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #4CAF82; text-align: center;">📅 NUEVA CITA AGENDADA - EQUILIBRA</h2>
+                
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <p><strong>Fecha:</strong> {fecha}</p>
+                    <p><strong>Hora:</strong> {hora}</p>
+                    <p><strong>Teléfono:</strong> {telefono}</p>
+                    <p><strong>Síntoma principal:</strong> {sintoma}</p>
+                </div>
+                
+                <p>La cita ha sido registrada exitosamente en el calendario de Google.</p>
+                <p>Por favor contacta al paciente para confirmar los detalles.</p>
+                
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #4CAF82;">
+                    <p>Saludos,<br>
+                    <strong>Equilibra</strong> - Sistema de Citas Psicológicas</p>
+                </div>
+            </div>
+            """
+        })
+        
+        app.logger.info(f"✅ Email enviado via Resend a {destinatario}")
+        return True
+            
+    except Exception as e:
+        app.logger.error(f"❌ Error con Resend: {e}")
         return False
 
 def limpiar_datos_aprendizaje():
@@ -1346,7 +1367,7 @@ def index():
 
                             if evento_url:
                                 # Intentar enviar email pero no bloquear si falla
-                                email_enviado = enviar_correo_confirmacion(
+                                enviar_correo_confirmacion(
                                     os.getenv("PSICOLOGO_EMAIL"),
                                     cita["fecha"],
                                     cita["hora"],
