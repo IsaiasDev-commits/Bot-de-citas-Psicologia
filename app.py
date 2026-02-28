@@ -29,6 +29,11 @@ from typing import Tuple, Optional, List, Dict, Any
 from dateutil import parser
 import resend
 
+# Importar nuevos servicios con arquitectura mejorada
+from services.ai_service import AIServiceFactory, AIServiceStrategy
+from services.validation_service import ValidationService
+from services.conversation_service import ConversationService
+
 # Cargar variables de entorno desde .env
 load_dotenv()
 
@@ -96,106 +101,110 @@ if os.environ.get('FLASK_ENV') != 'production':
     app.logger.debug(f"Files in directory: {os.listdir('.')}")
 
 # Crear directorios necesarios
-for directory in ["conversaciones", "datos", "logs"]:
+for directory in ["conversaciones", "datos", "logs", "services"]:
     if not os.path.exists(directory):
         os.makedirs(directory)
 
 horarios_cache = {}
 cache_lock = threading.Lock()
 
+# ==================== INICIALIZACIÓN DE SERVICIOS MEJORADOS ====================
+# Servicios con arquitectura mejorada usando patrones de diseño
+
+# 1. Servicio de validación (Template Method Pattern)
+validation_service = ValidationService()
+
+# 2. Servicio de IA (Strategy Pattern + Factory Pattern + Decorator Pattern)
+ai_service = None
+try:
+    ai_service = AIServiceFactory.create_service("groq")
+    app.logger.info("✅ Servicio de IA inicializado con Strategy Pattern")
+except Exception as e:
+    app.logger.error(f"❌ Error inicializando servicio de IA: {e}")
+    ai_service = AIServiceFactory.create_service("fallback")
+    app.logger.info("✅ Usando servicio de IA de fallback")
+
+# ==================== CACHÉ PARA RESPUESTAS DE IA ====================
+# Caché LRU para respuestas de Groq para reducir costos y latencia
+respuestas_ia_cache = {}
+respuestas_ia_cache_lock = threading.Lock()
+CACHE_MAX_SIZE = 100  # Máximo 100 respuestas en caché
+CACHE_TTL = 3600  # 1 hora en segundos
+
+def limpiar_cache_respuestas():
+    """Limpia respuestas antiguas del caché de IA"""
+    try:
+        while True:
+            time.sleep(300)  # Cada 5 minutos
+            with respuestas_ia_cache_lock:
+                now = time.time()
+                keys_to_delete = []
+                for key, (timestamp, _) in respuestas_ia_cache.items():
+                    if now - timestamp > CACHE_TTL:
+                        keys_to_delete.append(key)
+                
+                for key in keys_to_delete:
+                    del respuestas_ia_cache[key]
+                
+                if keys_to_delete:
+                    app.logger.info(f"Cache de respuestas IA limpiado. Eliminadas {len(keys_to_delete)} entradas.")
+    except Exception as e:
+        app.logger.error(f"Error limpiando cache de respuestas IA: {e}")
+
+def obtener_cache_key(texto: str, sintoma: str = None) -> str:
+    """Genera una clave única para el caché basada en texto y síntoma"""
+    import hashlib
+    contenido = f"{texto[:200]}_{sintoma}"  # Limitar longitud para eficiencia
+    return hashlib.md5(contenido.encode('utf-8')).hexdigest()
+
+def obtener_respuesta_cacheada(texto: str, sintoma: str = None) -> Optional[str]:
+    """Obtiene respuesta del caché si existe y es válida"""
+    cache_key = obtener_cache_key(texto, sintoma)
+    
+    with respuestas_ia_cache_lock:
+        if cache_key in respuestas_ia_cache:
+            timestamp, respuesta = respuestas_ia_cache[cache_key]
+            if time.time() - timestamp < CACHE_TTL:
+                app.logger.info(f"✅ Respuesta obtenida del caché para clave: {cache_key[:8]}...")
+                return respuesta
+            else:
+                # Eliminar entrada expirada
+                del respuestas_ia_cache[cache_key]
+    
+    return None
+
+def guardar_respuesta_cache(texto: str, sintoma: str = None, respuesta: str = ""):
+    """Guarda una respuesta en el caché"""
+    if not respuesta or len(respuesta) < 10:
+        return
+    
+    cache_key = obtener_cache_key(texto, sintoma)
+    
+    with respuestas_ia_cache_lock:
+        # Limitar tamaño del caché
+        if len(respuestas_ia_cache) >= CACHE_MAX_SIZE:
+            # Eliminar la entrada más antigua
+            oldest_key = min(respuestas_ia_cache.keys(), 
+                           key=lambda k: respuestas_ia_cache[k][0])
+            del respuestas_ia_cache[oldest_key]
+        
+        respuestas_ia_cache[cache_key] = (time.time(), respuesta)
+        app.logger.info(f"💾 Respuesta guardada en caché. Tamaño actual: {len(respuestas_ia_cache)}")
+
 # ==================== FUNCIONES DE VALIDACIÓN DE HORARIOS ====================
 
 def validar_horario_cita(fecha_str: str, hora_str: str) -> Tuple[bool, str]:
     """
-    Validación estricta de horarios de cita
-    - No permitir citas en el pasado
-    - No permitir citas fuera del horario laboral
-    - Restricción de tiempo mínimo para agendar
+    Validación estricta de horarios de cita usando el servicio de validación mejorado
+    (Template Method Pattern)
     """
-    try:
-        # Combinar fecha y hora
-        fecha_hora_cita = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M")
-        ahora = datetime.now()
-        
-        # 1. No permitir citas en el pasado
-        if fecha_hora_cita <= ahora:
-            return False, "No se pueden agendar citas en horarios pasados"
-        
-        # 2. Validar día de la semana
-        dia_semana = fecha_hora_cita.weekday()
-        if dia_semana == 6:  # Domingo
-            return False, "No hay atención los domingos"
-        
-        # 3. Validar horario laboral según día
-        hora_num = int(hora_str.split(':')[0])
-        
-        if dia_semana in [0, 1, 2, 3, 4]:  # Lunes a Viernes
-            if not (14 <= hora_num <= 19):
-                return False, "Horario no disponible. Lunes a Viernes: 14:00 - 19:00"
-        elif dia_semana == 5:  # Sábado
-            if not (8 <= hora_num <= 14):
-                return False, "Horario no disponible. Sábados: 08:00 - 14:00"
-        
-        # 4. Restricción de tiempo mínimo para agendar (30 minutos)
-        tiempo_minimo_agendamiento = timedelta(minutes=30)
-        if fecha_hora_cita - ahora < tiempo_minimo_agendamiento:
-            return False, "Debe agendar con al menos 30 minutos de anticipación"
-        
-        # 5. Restricción adicional: No permitir agendar para el mismo día después de las 18:00
-        if (fecha_hora_cita.date() == ahora.date() and 
-            ahora.hour >= 18 and hora_num >= 18):
-            return False, "No se pueden agendar citas para hoy después de las 18:00"
-            
-        return True, "Horario válido"
-        
-    except ValueError as e:
-        return False, f"Formato de fecha/hora inválido: {str(e)}"
+    return validation_service.validate_appointment_time(fecha_str, hora_str)
 
 def obtener_horarios_disponibles_estrictos(fecha_str: str) -> List[Dict[str, Any]]:
     """
-    Obtener horarios disponibles con validaciones estrictas
+    Obtener horarios disponibles con validaciones estrictas usando el servicio de validación
     """
-    try:
-        fecha_cita = datetime.strptime(fecha_str, "%Y-%m-%d")
-        dia_semana = fecha_cita.weekday()
-        ahora = datetime.now()
-        es_hoy = fecha_cita.date() == ahora.date()
-        
-        # Definir horarios base según día
-        if dia_semana in [0, 1, 2, 3, 4]:  # Lunes a Viernes
-            horarios_base = ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00"]
-        elif dia_semana == 5:  # Sábado
-            horarios_base = ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00"]
-        else:  # Domingo
-            return []
-        
-        horarios_filtrados = []
-        
-        for hora in horarios_base:
-            # Validación estricta para cada horario
-            es_valido, mensaje = validar_horario_cita(fecha_str, hora)
-            
-            if es_valido:
-                # Verificación adicional: para hoy, filtrar horarios que ya pasaron
-                if es_hoy:
-                    hora_actual = ahora.hour
-                    minuto_actual = ahora.minute
-                    hora_cita = int(hora.split(':')[0])
-                    
-                    # Si la hora de la cita ya pasó, no mostrar
-                    if hora_cita < hora_actual or (hora_cita == hora_actual and minuto_actual >= 0):
-                        continue
-                
-                horarios_filtrados.append({
-                    'hora': hora,
-                    'disponible': True,
-                    'mensaje': 'Disponible'
-                })
-        
-        return horarios_filtrados
-        
-    except ValueError:
-        return []
+    return validation_service.get_available_time_slots(fecha_str)
 
 class SistemaAprendizaje:
     def __init__(self):
@@ -334,7 +343,7 @@ def formatear_respuesta_estructurada(texto: str) -> str:
             for linea in lineas:
                 linea = linea.strip()
                 if linea:
-                    # Añadir emojis y formato a los consejos
+                    
                     if re.match(r'(\d+[\.\)])', linea):
                         linea = f"⭐ {linea}"
                     elif re.match(r'[•\-]', linea):
@@ -359,8 +368,8 @@ def formatear_respuesta_estructurada(texto: str) -> str:
 
 def generar_respuesta_groq(texto: str, sintoma: str = None) -> str:
     """
-    Función mejorada para generar respuestas usando Groq con selección inteligente de modelos
-    y formato estructurado
+    Función mejorada para generar respuestas usando el servicio de IA con arquitectura mejorada
+    (Strategy Pattern + Factory Pattern + Decorator Pattern)
     
     Args:
         texto: Texto del usuario
@@ -369,87 +378,41 @@ def generar_respuesta_groq(texto: str, sintoma: str = None) -> str:
     Returns:
         str: Respuesta generada y formateada
     """
+    # 1. Verificar si la respuesta está en caché
+    respuesta_cacheada = obtener_respuesta_cacheada(texto, sintoma)
+    if respuesta_cacheada:
+        app.logger.info(f"✅ Respuesta obtenida del caché (texto: {len(texto)} chars, síntoma: {sintoma})")
+        return respuesta_cacheada
+    
     try:
-        GROQ_API_KEY = os.getenv('GROQ_API_KEY')
-        if not GROQ_API_KEY:
-            app.logger.error("GROQ_API_KEY no configurada")
+        # Usar el servicio de IA con arquitectura mejorada
+        if not ai_service:
+            app.logger.error("❌ Servicio de IA no inicializado")
             return "Lo siento, no puedo generar una respuesta en este momento."
-
-        client = Groq(api_key=GROQ_API_KEY)
-
+        
         # Determinar complejidad del tema
         complejidad = "normal"
         if detectar_crisis(texto):
             complejidad = "crisis"
         elif len(texto) > 150 or (sintoma and sintoma in ["Ansiedad", "Depresión", "Estrés", "Problemas familiares", "Problemas de pareja"]):
             complejidad = "complejo"
-
-        # Seleccionar modelo óptimo
-        modelo = seleccionar_modelo_groq(len(texto), complejidad)
         
-        app.logger.info(f"Usando modelo Groq: {modelo} para texto de {len(texto)} caracteres, complejidad: {complejidad}")
-
-        # Prompt especializado para apoyo psicológico con formato estructurado
-        system_prompt = """Eres un asistente psicológico profesional, empático y compasivo. Tu objetivo es:
-
-1. **Validar emociones**: Reconocer y validar los sentimientos del usuario
-2. **Ofrecer apoyo**: Proporcionar contención emocional inmediata  
-3. **Guiar sin diagnosticar**: Orientar sin hacer diagnósticos médicos
-4. **Fomentar autocuidado**: Sugerir técnicas de regulación emocional
-5. **Derivar cuando sea necesario**: Recomendar buscar ayuda profesional en casos graves
-
-**FORMATO DE RESPUESTA ESTRUCTURADO:**
-
-- **Empieza con validación emocional**: "Entiendo que..." "Es normal sentir..."
-- **Separa claramente las ideas** usando párrafos
-- **Para consejos prácticos**, usa formato de lista con:
-  • Viñetas (•) o números (1. 2. 3.)
-  • Emojis relevantes (💡, ⭐, 🌱, 🧘‍♀️, 📝)
-  • Títulos claros como "Consejos prácticos:" o "Estrategias que pueden ayudar:"
-- **Incluye preguntas reflexivas** al final para continuar la conversación
-- **Mantén un tono cálido, profesional y esperanzador**
-- **Evita lenguaje técnico excesivo**
-- **En crisis graves**, recomienda contactar líneas de ayuda profesional inmediatamente
-
-Ejemplo de formato ideal:
-
-Entiendo que estés pasando por un momento de [emoción]. Es completamente normal sentirse así cuando...
-
-💡 Algunas estrategias que pueden ayudarte:
-
-Practica la respiración profunda por 5 minutos
-
-Escribe tus pensamientos en un diario
-
-Da un corto paseo al aire libre
-
-¿Has probado alguna de estas técnicas? ¿Cómo te sientes al respecto?
-
-"""
-
-        response = client.chat.completions.create(
-            model=modelo,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": texto}
-            ],
-            max_tokens=600,  # Un poco más para permitir formato estructurado
-            temperature=0.7,
-        )
-
-        respuesta_bruta = response.choices[0].message.content
+        # Generar respuesta usando el servicio de IA
+        respuesta_bruta = ai_service.generate_response(texto, sintoma, complejidad)
         
         # Aplicar formato estructurado a la respuesta
         respuesta_formateada = formatear_respuesta_estructurada(respuesta_bruta)
         
-        # Log del uso del modelo
-        app.logger.info(f"✅ Respuesta generada con {modelo} - Tokens: {response.usage.total_tokens if response.usage else 'N/A'}")
-        app.logger.info(f"📝 Longitud respuesta: {len(respuesta_bruta)} -> {len(respuesta_formateada)} caracteres")
+        # Log del uso del servicio
+        app.logger.info(f"✅ Respuesta generada con servicio de IA - Longitud: {len(respuesta_bruta)} -> {len(respuesta_formateada)} caracteres")
+        
+        # 2. Guardar respuesta en caché para futuras consultas similares
+        guardar_respuesta_cache(texto, sintoma, respuesta_formateada)
         
         return respuesta_formateada
 
     except Exception as e:
-        app.logger.error(f"Error al generar respuesta con Groq: {e}")
+        app.logger.error(f"Error al generar respuesta con servicio de IA: {e}")
         
         # Fallback a respuestas predefinidas en caso de error
         if detectar_crisis(texto):
@@ -459,7 +422,7 @@ Da un corto paseo al aire libre
 
 def generar_respuesta_llm(prompt: str, sintoma: str = None) -> str:
     """
-    Función actualizada para usar la implementación mejorada de Groq
+    Función actualizada para usar el servicio de IA con arquitectura mejorada
     
     Args:
         prompt: Prompt para el modelo
@@ -469,8 +432,25 @@ def generar_respuesta_llm(prompt: str, sintoma: str = None) -> str:
         str: Respuesta generada
     """
     try:
-        respuesta = generar_respuesta_groq(prompt, sintoma)
-        return respuesta
+        # Usar el servicio de IA directamente para mejor rendimiento
+        if not ai_service:
+            app.logger.error("❌ Servicio de IA no inicializado")
+            return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
+        
+        # Determinar complejidad del tema
+        complejidad = "normal"
+        if detectar_crisis(prompt):
+            complejidad = "crisis"
+        elif len(prompt) > 150 or (sintoma and sintoma in ["Ansiedad", "Depresión", "Estrés", "Problemas familiares", "Problemas de pareja"]):
+            complejidad = "complejo"
+        
+        # Generar respuesta usando el servicio de IA
+        respuesta_bruta = ai_service.generate_response(prompt, sintoma, complejidad)
+        
+        # Aplicar formato estructurado a la respuesta
+        respuesta_formateada = formatear_respuesta_estructurada(respuesta_bruta)
+        
+        return respuesta_formateada
     
     except Exception as e:
         app.logger.error(f"Error al generar respuesta con LLM: {e}")
@@ -484,18 +464,10 @@ def sanitizar_input(texto):
     return texto[:500] if len(texto) > 500 else texto
 
 def validar_telefono(telefono) -> Tuple[bool, str]:
-    if not telefono:
-        return False, "Teléfono requerido"
-    
-    telefono_limpio = re.sub(r'[^\d]', '', telefono)
-    
-    if len(telefono_limpio) != 10:
-        return False, "El teléfono debe tener 10 dígitos"
-    
-    if not telefono_limpio.startswith('09'):
-        return False, "El teléfono debe comenzar con 09"
-    
-    return True, ""
+    """
+    Validar teléfono usando el servicio de validación
+    """
+    return validation_service.validate_phone(telefono)
 
 def calcular_duracion_dias(fecha_str):
     if not fecha_str:
@@ -1115,7 +1087,7 @@ def crear_evento_calendar(fecha, hora, telefono, sintoma):
             app.logger.error("No se pudo obtener el servicio de calendario")
             return None
             
-        # Crear el evento con formato mejorado
+        # Crear el evento con este formato 
         start_time = f"{fecha}T{hora}:00-05:00"
         end_time = f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00"
         
@@ -1191,14 +1163,14 @@ def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
             # Usar Resend API
             return enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma)
         else:
-            # Fallback: solo loggear (no bloquear)
+            # Fallback: solo loggear 
             app.logger.info(f"📧 Simulando envío de email a {destinatario}")
             app.logger.info(f"   Cita: {fecha} {hora} - Tel: {telefono} - Síntoma: {sintoma}")
             return True
             
     except Exception as e:
         app.logger.warning(f"⚠️ Email no enviado (pero no crítico): {e}")
-        return True  # No bloquear por error de email
+        return True  
 
 def enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma):
     """
@@ -1329,7 +1301,7 @@ def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
             orderBy='startTime'
         ).execute()
         
-        # Verificar superposición estricta - CORREGIDO: usar parser.isoparse
+        
         hora_solicitada_start = parser.isoparse(start_time)
         hora_solicitada_end = parser.isoparse(end_time)
         
@@ -1409,165 +1381,42 @@ if os.environ.get('FLASK_ENV') == 'production' and not os.environ.get('TESTING')
         
         hilo_limpieza_cache = threading.Thread(target=limpiar_cache_horarios, daemon=True)
         hilo_limpieza_cache.start()
-        app.logger.info("Hilos de limpieza iniciados")
+        
+        hilo_limpieza_cache_respuestas = threading.Thread(target=limpiar_cache_respuestas, daemon=True)
+        hilo_limpieza_cache_respuestas.start()
+        
+        app.logger.info("Hilos de limpieza iniciados (aprendizaje, horarios, respuestas IA)")
     except Exception as e:
         app.logger.error(f"Error iniciando hilos de limpieza: {e}")
 
 @app.route("/", methods=["GET", "POST"])
 @limiter.limit("500 per hour")
 def index():
-    if "fechas_validas" not in session:
-        session["fechas_validas"] = {
-            'hoy': datetime.now().strftime('%Y-%m-%d'),
-            'min_cita': datetime.now().strftime('%Y-%m-%d'),
-            'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
-            'min_sintoma': (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d'),
-            'max_sintoma': datetime.now().strftime('%Y-%m-%d')
-        }
-
-    if "conversacion_data" not in session:
-        conversacion = SistemaConversacional()
-        session.update({
-            "estado": "inicio",
-            "sintoma_actual": None,
-            "conversacion_data": conversacion.to_dict()
-        })
-    else:
-        conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
-
+    """
+    Ruta principal de Equilibra - Versión refactorizada usando ConversationService
+    (State Pattern + Service Pattern para mejor arquitectura)
+    """
+    # Inicializar servicio de conversación
+    conversation_service = ConversationService()
+    
+    # Inicializar sesión si es necesario
+    conversation_service.initialize_session()
+    
     if request.method == "POST":
-        estado_actual = session["estado"]
+        # Manejar solicitud POST usando el servicio de conversación
+        success, error_message = conversation_service.handle_post_request(request.form)
         
-        app.logger.info(f"Estado actual: {estado_actual}, datos del formulario: {dict(request.form)}")
-
-        if estado_actual == "inicio":
-            if sintomas := request.form.getlist("sintomas"):
-                if not sintomas:
-                    return render_template("index.html", error="Por favor selecciona un síntoma")
-                
-                session["sintoma_actual"] = sintomas[0]
-                session["estado"] = "evaluacion"
-                conversacion.agregar_interaccion('bot', f"Entiendo que estás experimentando {sintomas[0].lower()}. ¿Desde cuándo lo notas?", sintomas[0])
-                app.logger.info(f"Usuario seleccionó síntoma: {sintomas[0]}")
-
-        elif estado_actual == "evaluacion":
-            if fecha := request.form.get("fecha_inicio_sintoma"):
-                duracion = calcular_duracion_dias(fecha)
-                session["estado"] = "profundizacion"
-                
-                if duracion < 30:
-                    comentario = "Es bueno que lo identifiques temprano."
-                elif duracion < 365:
-                    comentario = "Varios meses con esto... debe ser difícil."
-                else:
-                    comentario = "Tu perseverancia es admirable."
-                
-                respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], "")
-                conversacion.agregar_interaccion('bot', f"{comentario} {respuesta}", session["sintoma_actual"])
-
-        elif estado_actual in ["profundizacion", "derivacion"]:
-            user_input = sanitizar_input(request.form.get("user_input", "").strip())
-            solicitar_cita = request.form.get("solicitar_cita")
-            
-            # SOLO si el usuario presiona explícitamente el botón de solicitar cita
-            if solicitar_cita and solicitar_cita.lower() == "true":
-                # El usuario hizo clic en el botón de solicitar cita - IR DIRECTAMENTE A AGENDAR
-                session["estado"] = "agendar_cita"
-                conversacion.agregar_interaccion('user', "Quiero agendar una cita", session["sintoma_actual"])
-                
-                mensaje = (
-                    "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
-                    "📅 Selecciona una fecha disponible\n"
-                    "⏰ Elige un horario que te convenga\n"
-                    "📱 Ingresa tu número de teléfono para contactarte"
-                )
-                conversacion.agregar_interaccion('bot', mensaje, session["sintoma_actual"])
-                app.logger.info("Usuario solicitó cita mediante botón - Saltando a agendamiento")
-                
-            elif user_input:
-                # El usuario envió un mensaje de texto - CONVERSACIÓN NORMAL SIN DETECCIÓN AUTOMÁTICA DE CITA
-                conversacion.agregar_interaccion('user', user_input, session["sintoma_actual"])
-                
-                # Solo responde normalmente
-                respuesta = conversacion.obtener_respuesta(session["sintoma_actual"], user_input)
-                conversacion.agregar_interaccion('bot', respuesta, session["sintoma_actual"])
-
-        elif estado_actual == "agendar_cita":
-            if request.form.get("cancelar_cita"):
-                session["estado"] = "profundizacion"
-                conversacion.agregar_interaccion('bot', "Entendido, no hay problema. ¿Hay algo más en lo que pueda ayudarte hoy?", session["sintoma_actual"])
-                app.logger.info("Usuario canceló proceso de cita")
-            else:
-                fecha = request.form.get("fecha_cita")
-                telefono = request.form.get("telefono", "").strip()
-                # USAR hora_seleccionada EN LUGAR DE hora_cita
-                hora = request.form.get("hora_seleccionada")
-
-                if fecha and telefono and hora:
-                    valido, mensaje_error = validar_telefono(telefono)
-                    if not valido:
-                        conversacion.agregar_interaccion('bot', f"⚠️ {mensaje_error}. Por favor, ingrésalo de nuevo.", None)
-                        app.logger.warning(f"Teléfono inválido: {telefono}")
-                    else:
-                        # Validación estricta de horario antes de agendar
-                        es_valido, mensaje_validacion = validar_horario_cita(fecha, hora)
-                        if not es_valido:
-                            conversacion.agregar_interaccion('bot', f"⚠️ {mensaje_validacion}. Por favor selecciona otro horario.", None)
-                            app.logger.warning(f"Horario inválido: {fecha} {hora} - {mensaje_validacion}")
-                        else:
-                            cita = {
-                                "fecha": fecha,
-                                "hora": hora,
-                                "telefono": telefono
-                            }
-
-                            evento_url = crear_evento_calendar(
-                                cita["fecha"],
-                                cita["hora"],
-                                cita["telefono"],
-                                session["sintoma_actual"]
-                            )
-
-                            if evento_url:
-                                # Intentar enviar email pero no bloquear si falla
-                                enviar_correo_confirmacion(
-                                    "chatbotequilibra@gmail.com",
-                                    cita["fecha"],
-                                    cita["hora"],
-                                    cita["telefono"],
-                                    session["sintoma_actual"]
-                                )
-                                
-                                mensaje = (
-                                    f"✅ **Cita confirmada**\n\n"
-                                    f"📅 **Fecha:** {cita['fecha']}\n"
-                                    f"⏰ **Hora:** {cita['hora']}\n"
-                                    f"📱 **Teléfono:** {cita['telefono']}\n\n"
-                                    f"Recibirás una llamada para coordinar tu consulta. ¡Gracias por confiar en Equilibra! 🌟"
-                                )
-
-                                conversacion.agregar_interaccion('bot', mensaje, None)
-                                session["estado"] = "fin"
-                                app.logger.info(f"Cita agendada exitosamente: {cita}")
-                            else:
-                                conversacion.agregar_interaccion('bot', "❌ **Error al agendar**\n\nLo siento, hubo un problema al agendar tu cita. Por favor, intenta nuevamente.", None)
-                                app.logger.error(f"Error al agendar cita: {cita}")
-                else:
-                    conversacion.agregar_interaccion('bot', "⚠️ **Campos incompletos**\n\nPor favor completa todos los campos requeridos para agendar tu cita.", None)
-                    app.logger.warning("Faltan campos en el formulario de cita")
-
-        session["conversacion_data"] = conversacion.to_dict()
+        if not success and error_message:
+            # Si hay un error, renderizar con mensaje de error
+            template_data = conversation_service.get_template_data()
+            return render_template("index.html", error=error_message, **template_data)
+        
+        # Redirigir para evitar reenvío de formulario
         return redirect(url_for("index"))
-
-    session["conversacion_data"] = conversacion.to_dict()
-    return render_template(
-        "index.html",
-        estado=session["estado"],
-        sintomas=sintomas_disponibles,
-        conversacion=conversacion,
-        sintoma_actual=session.get("sintoma_actual"),
-        fechas_validas=session["fechas_validas"]
-    )
+    
+    # GET request - simplemente renderizar la plantilla con datos actuales
+    template_data = conversation_service.get_template_data()
+    return render_template("index.html", **template_data)
 
 @app.route("/reset", methods=["POST"])
 @limiter.limit("50 per hour")
@@ -1656,7 +1505,7 @@ def verificar_horario():
             app.logger.error(f"❌ Error al listar eventos: {e}")
             return jsonify({"disponible": False, "error": "Error al verificar calendario"})
         
-        # Verificar superposición - CORREGIDO: usar parser.isoparse
+        # Verificar superposición 
         disponible = True
         hora_solicitada_start = parser.isoparse(start_time)
         hora_solicitada_end = parser.isoparse(end_time)
@@ -1831,7 +1680,7 @@ def test_calendar():
         # Intentar listar calendarios
         calendars = service.calendarList().list().execute()
         
-        # Probar acceso de escritura creando un evento de prueba (luego lo borramos)
+        # Probar acceso de escritura creando un evento de prueba 
         test_event = {
             'summary': 'Test Equilibra - Borrar',
             'start': {'dateTime': '2025-01-01T10:00:00-05:00', 'timeZone': 'America/Guayaquil'},
@@ -1870,7 +1719,7 @@ def health_check():
         try:
             service = get_calendar_service()
             if service:
-                # Probar acceso básico
+                
                 service.calendarList().list().execute()
                 calendar_ok = True
                 calendar_message = "Conectado"
@@ -1879,18 +1728,52 @@ def health_check():
         except Exception as e:
             calendar_message = f"Error: {str(e)}"
         
+        # Información del caché de respuestas IA
+        with respuestas_ia_cache_lock:
+            cache_size = len(respuestas_ia_cache)
+            cache_hit_rate = "N/A"  # Podría calcularse con métricas
+        
         return jsonify({
             'status': 'healthy' if all([groq_ok, email_ok, calendar_ok]) else 'degraded',
             'services': {
                 'groq': groq_ok,
                 'email': email_ok,
                 'calendar': {'ok': calendar_ok, 'message': calendar_message}
+            },
+            'cache': {
+                'respuestas_ia_size': cache_size,
+                'max_size': CACHE_MAX_SIZE,
+                'ttl_seconds': CACHE_TTL
             }
         })
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
-# Ruta para sitemap.xml corregida
+@app.route('/debug-cache')
+def debug_cache():
+    """Endpoint para debug del caché de respuestas IA"""
+    try:
+        with respuestas_ia_cache_lock:
+            cache_info = {
+                'total_entries': len(respuestas_ia_cache),
+                'max_size': CACHE_MAX_SIZE,
+                'ttl_seconds': CACHE_TTL,
+                'entries': []
+            }
+            
+            # Mostrar algunas entradas de ejemplo (limitado a 5)
+            for i, (key, (timestamp, respuesta)) in enumerate(list(respuestas_ia_cache.items())[:5]):
+                cache_info['entries'].append({
+                    'key': key[:12] + '...',
+                    'age_seconds': int(time.time() - timestamp),
+                    'respuesta_preview': respuesta[:100] + '...' if len(respuesta) > 100 else respuesta
+                })
+            
+            return jsonify(cache_info)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Ruta para sitemap.xml 
 @app.route('/sitemap.xml')
 def sitemap():
     """Generar sitemap XML correctamente"""
@@ -1915,7 +1798,7 @@ def sitemap():
         app.logger.error(f"Error generando sitemap: {e}")
         return '<?xml version="1.0" encoding="UTF-8"?><error>Error generating sitemap</error>', 500
 
-# Ruta para robots.txt corregida
+# Ruta para robots.txt 
 @app.route('/robots.txt')
 def robots():
     """Generar robots.txt dinámicamente"""
@@ -1969,7 +1852,7 @@ if __name__ == "__main__":
     
     app.logger.info(f"Iniciando aplicación Equilibra en puerto {port}")
     
-    # En producción usar Waitress, en desarrollo usar Flask dev server
+    
     if os.environ.get('FLASK_ENV') == 'production':
         from waitress import serve
         serve(app, host='0.0.0.0', port=port)
