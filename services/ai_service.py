@@ -211,8 +211,40 @@ class GroqAIService(AIServiceStrategy):
             logger.info(f"📊 Modelo Groq: {model} | Texto: {len(text)} chars | Complejidad: {complexity}")
             logger.info(f"🔑 API Key configurada: {'SÍ' if self.api_key else 'NO'} (longitud: {len(self.api_key) if self.api_key else 0})")
             
-            # Prompt especializado para apoyo psicológico
-            system_prompt = self._get_system_prompt()
+            # Prompt profesional para psicólogo clínico
+            system_prompt = """Eres un psicólogo profesional con enfoque clínico.
+
+Debes responder con claridad, estructura y profundidad.
+
+Reglas obligatorias de formato:
+
+No usar emojis.
+No usar markdown.
+No usar símbolos decorativos.
+No usar negritas.
+No usar listas con viñetas.
+No dejar frases incompletas.
+No cortar preguntas.
+Separar cada idea con una línea en blanco.
+Desarrollar completamente cada recomendación.
+
+Estructura obligatoria de respuesta:
+
+Primero: breve validación emocional.
+Segundo: análisis de la situación.
+Tercero: recomendaciones prácticas desarrolladas.
+Cuarto: preguntas reflexivas completas al final.
+
+Mantén un tono profesional, empático y clínico."""
+            
+            # Crear prompt del usuario con contexto
+            user_prompt = f"""Contexto del usuario:
+Síntoma actual: {symptom}
+
+Mensaje del usuario:
+"{text}"
+
+Responde ahora de forma estructurada y profesional."""
             
             logger.info(f"📝 Enviando solicitud a Groq API con modelo {model}...")
             
@@ -220,10 +252,10 @@ class GroqAIService(AIServiceStrategy):
                 model=model,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": text}
+                    {"role": "user", "content": user_prompt}
                 ],
-                max_tokens=600,
-                temperature=0.7,
+                max_tokens=800,
+                temperature=0.4,
             )
             
             logger.info(f"🎯🎯🎯 RESPUESTA REAL RECIBIDA DE GROQ 🎯🎯🎯")
@@ -231,13 +263,13 @@ class GroqAIService(AIServiceStrategy):
             
             raw_response = response.choices[0].message.content
             
-            # Aplicar formato estructurado
-            formatted_response = self.format_response(raw_response)
+            # Limpiar respuesta (eliminar cualquier markdown residual)
+            cleaned_response = self._clean_response(raw_response)
             
-            logger.info(f"📝 Longitud respuesta: {len(raw_response)} -> {len(formatted_response)} caracteres")
-            logger.info(f"📋 Primeros 100 chars: {raw_response[:100]}...")
+            logger.info(f"📝 Longitud respuesta: {len(raw_response)} -> {len(cleaned_response)} caracteres")
+            logger.info(f"📋 Primeros 100 chars: {cleaned_response[:100]}...")
             
-            return formatted_response
+            return cleaned_response
             
         except Exception as e:
             logger.error(f"❌❌❌ ERROR en Groq API: {e}")
@@ -309,12 +341,55 @@ Da un corto paseo al aire libre
 ¿Has probado alguna de estas técnicas? ¿Cómo te sientes al respecto?
 """
     
+    def _clean_response(self, response: str) -> str:
+        """
+        Limpia la respuesta eliminando markdown, emojis y formateando correctamente
+        """
+        if not response:
+            return response
+        
+        # Eliminar markdown básico
+        cleaned = response
+        
+        # Eliminar **negritas**
+        cleaned = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned)
+        
+        # Eliminar *cursivas*
+        cleaned = re.sub(r'\*(.*?)\*', r'\1', cleaned)
+        
+        # Eliminar encabezados markdown (#, ##, ###)
+        cleaned = re.sub(r'^#+\s*', '', cleaned, flags=re.MULTILINE)
+        
+        # Eliminar listas con viñetas o números
+        cleaned = re.sub(r'^[\s]*[•\-*]\s*', '', cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r'^[\s]*\d+[\.\)]\s*', '', cleaned, flags=re.MULTILINE)
+        
+        # Eliminar emojis comunes
+        emoji_pattern = re.compile("["
+            u"\U0001F600-\U0001F64F"  # emoticons
+            u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+            u"\U0001F680-\U0001F6FF"  # transport & map symbols
+            u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+            u"\U00002702-\U000027B0"  # dingbats
+            u"\U000024C2-\U0001F251"
+            "]+", flags=re.UNICODE)
+        cleaned = emoji_pattern.sub('', cleaned)
+        
+        # Asegurar separación adecuada entre párrafos
+        # Reemplazar múltiples saltos de línea por dos
+        cleaned = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned)
+        
+        # Eliminar espacios en blanco al inicio y final
+        cleaned = cleaned.strip()
+        
+        return cleaned
+    
     def _get_fallback_response(self, text: str) -> str:
         """
         Retorna una respuesta de fallback en caso de error
         """
         if self._determine_complexity(text) == 'crisis':
-            return "⚠️ **Crisis detectada**\n\nVeo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato.\n\n📞 **Líneas de ayuda inmediata:**\n• Línea de crisis: 911\n• Tu psicólogo de confianza\n• Servicios de emergencia local\n\nNo estás solo/a, busca ayuda profesional ahora."
+            return "Crisis detectada\n\nVeo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato.\n\nLíneas de ayuda inmediata:\nLínea de crisis: 911\nTu psicólogo de confianza\nServicios de emergencia local\n\nNo estás solo/a, busca ayuda profesional ahora."
         
         return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
 
