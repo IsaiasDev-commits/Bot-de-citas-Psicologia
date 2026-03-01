@@ -117,12 +117,20 @@ validation_service = ValidationService()
 # 2. Servicio de IA (Strategy Pattern + Factory Pattern + Decorator Pattern)
 ai_service = None
 try:
-    ai_service = AIServiceFactory.create_service("groq")
-    app.logger.info("✅ Servicio de IA inicializado con Strategy Pattern")
+    # Verificar si GROQ_API_KEY está configurada antes de intentar crear el servicio
+    groq_api_key = os.getenv('GROQ_API_KEY')
+    if not groq_api_key:
+        app.logger.warning("⚠️ GROQ_API_KEY no configurada. Usando servicio de fallback.")
+        ai_service = AIServiceFactory.create_service("fallback")
+        app.logger.info("✅ Servicio de IA inicializado con Fallback Strategy Pattern")
+    else:
+        app.logger.info(f"🔑 GROQ_API_KEY encontrada (longitud: {len(groq_api_key)} caracteres)")
+        ai_service = AIServiceFactory.create_service("groq")
+        app.logger.info("✅ Servicio de IA inicializado con Groq Strategy Pattern")
 except Exception as e:
     app.logger.error(f"❌ Error inicializando servicio de IA: {e}")
     ai_service = AIServiceFactory.create_service("fallback")
-    app.logger.info("✅ Usando servicio de IA de fallback")
+    app.logger.info("✅ Usando servicio de IA de fallback por error")
 
 # ==================== CACHÉ PARA RESPUESTAS DE IA ====================
 # Caché LRU para respuestas de Groq para reducir costos y latencia
@@ -1335,10 +1343,34 @@ def debug_env():
         'GOOGLE_CREDENTIALS_SET': bool(os.getenv('GOOGLE_CREDENTIALS')),
         'GOOGLE_CREDENTIALS_LENGTH': len(os.getenv('GOOGLE_CREDENTIALS', '')),
         'GROQ_API_KEY_SET': bool(os.getenv('GROQ_API_KEY')),
+        'GROQ_API_KEY_VALUE': '***' + os.getenv('GROQ_API_KEY', '')[-4:] if os.getenv('GROQ_API_KEY') else 'NO_CONFIGURADA',
         'EMAIL_USER_SET': bool(os.getenv('EMAIL_USER')),
-        'FLASK_ENV': os.getenv('FLASK_ENV')
+        'FLASK_ENV': os.getenv('FLASK_ENV'),
+        'RENDER': os.getenv('RENDER'),
+        'RENDER_EXTERNAL_HOSTNAME': os.getenv('RENDER_EXTERNAL_HOSTNAME'),
+        'PORT': os.getenv('PORT'),
+        'FLASK_SECRET_KEY_SET': bool(os.getenv('FLASK_SECRET_KEY')),
+        'RESEND_API_KEY_SET': bool(os.getenv('RESEND_API_KEY')),
+        'PSICOLOGO_EMAIL_SET': bool(os.getenv('PSICOLOGO_EMAIL'))
     }
     return jsonify(env_vars)
+
+@app.route('/debug-env-detailed')
+def debug_env_detailed():
+    """Verificar TODAS las variables de entorno disponibles"""
+    all_env_vars = dict(os.environ)
+    # Ocultar valores sensibles
+    safe_env_vars = {}
+    for key, value in all_env_vars.items():
+        if 'KEY' in key or 'SECRET' in key or 'PASSWORD' in key or 'CREDENTIALS' in key:
+            safe_env_vars[key] = '***' + value[-4:] if len(value) > 4 else '***'
+        else:
+            safe_env_vars[key] = value
+    
+    return jsonify({
+        'total_variables': len(safe_env_vars),
+        'variables': safe_env_vars
+    })
 
 @app.route('/test-calendar-connection')
 def test_calendar_connection():
