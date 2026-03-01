@@ -192,10 +192,26 @@ class ConversationService:
         
         # Inicializar servicios
         self.ai_service = None
-        try:
-            self.ai_service = AIServiceFactory.create_service("groq")
-        except Exception as e:
-            logger.error(f"Error inicializando servicio de IA: {e}")
+        
+        # Verificar si GROQ_API_KEY está configurada
+        import os
+        groq_api_key = os.getenv('GROQ_API_KEY')
+        
+        if groq_api_key:
+            logger.info(f"🔑 GROQ_API_KEY detectada (longitud: {len(groq_api_key)})")
+            logger.info("🔄 Intentando inicializar servicio Groq...")
+            
+            try:
+                self.ai_service = AIServiceFactory.create_service("groq")
+                logger.info("✅✅✅ SERVICIO GROQ INICIALIZADO CORRECTAMENTE ✅✅✅")
+                logger.info(f"📊 Tipo de servicio: {type(self.ai_service).__name__}")
+            except Exception as e:
+                logger.error(f"❌ Error inicializando servicio Groq: {e}")
+                logger.warning("⚠️ Usando servicio de fallback debido a error en Groq")
+                self.ai_service = AIServiceFactory.create_service("fallback")
+        else:
+            logger.warning("⚠️ GROQ_API_KEY NO configurada en variables de entorno")
+            logger.info("📋 Usando servicio de fallback por defecto")
             self.ai_service = AIServiceFactory.create_service("fallback")
     
     def initialize_session(self):
@@ -274,17 +290,29 @@ class ConversationService:
             session["conversacion_data"] = conversacion_data
     
     def get_conversation_response(self, user_input: str) -> str:
-        """Obtiene una respuesta del sistema conversacional"""
-        # Detectar crisis primero (simplificado)
+        """Obtiene una respuesta del sistema conversacional usando Groq API"""
+        # Detectar crisis primero
         crisis_keywords = ["suicidio", "matarme", "morir", "acabar con todo", "no quiero vivir", "desesperado"]
         if any(keyword in user_input.lower() for keyword in crisis_keywords):
             return "⚠️ **Crisis detectada**\n\nVeo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato.\n\n📞 **Líneas de ayuda inmediata:**\n• Línea de crisis: 911\n• Tu psicólogo de confianza\n• Servicios de emergencia local\n\nNo estás solo/a, busca ayuda profesional ahora."
-        
-        # Respuesta básica del sistema
+
         sintoma = session.get("sintoma_actual")
-        if sintoma:
-            return f"Entiendo que estás experimentando {sintoma.lower()}. Es importante que hables sobre cómo te sientes. ¿Te gustaría contarme más sobre lo que estás pasando?"
-        
+
+        try:
+            if self.ai_service:
+                logger.info("🔥 LLAMANDO A GROQ API REALMENTE 🔥")
+                prompt = f"""
+                El usuario está experimentando: {sintoma}.
+                Último mensaje del usuario: "{user_input}"
+
+                Responde de manera empática, profesional y estructurada.
+                """
+                response = self.ai_service.generate_response(prompt, sintoma)
+                logger.info("🎯 RESPUESTA REAL RECIBIDA DE GROQ")
+                return response
+        except Exception as e:
+            logger.error(f"Error usando Groq: {e}")
+
         return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
     
     def calculate_duration_days(self, fecha_str: str) -> int:

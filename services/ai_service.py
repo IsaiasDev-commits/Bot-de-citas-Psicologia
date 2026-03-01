@@ -207,10 +207,14 @@ class GroqAIService(AIServiceStrategy):
             # Seleccionar modelo óptimo
             model = self.select_model(len(text), complexity)
             
-            logger.info(f"Usando modelo Groq: {model} para texto de {len(text)} caracteres, complejidad: {complexity}")
+            logger.info(f"🔥🔥🔥 LLAMANDO A GROQ API REALMENTE 🔥🔥🔥")
+            logger.info(f"📊 Modelo Groq: {model} | Texto: {len(text)} chars | Complejidad: {complexity}")
+            logger.info(f"🔑 API Key configurada: {'SÍ' if self.api_key else 'NO'} (longitud: {len(self.api_key) if self.api_key else 0})")
             
             # Prompt especializado para apoyo psicológico
             system_prompt = self._get_system_prompt()
+            
+            logger.info(f"📝 Enviando solicitud a Groq API con modelo {model}...")
             
             response = self.client.chat.completions.create(
                 model=model,
@@ -222,19 +226,22 @@ class GroqAIService(AIServiceStrategy):
                 temperature=0.7,
             )
             
+            logger.info(f"🎯🎯🎯 RESPUESTA REAL RECIBIDA DE GROQ 🎯🎯🎯")
+            logger.info(f"✅ Respuesta generada con {model} - Tokens: {response.usage.total_tokens if response.usage else 'N/A'}")
+            
             raw_response = response.choices[0].message.content
             
             # Aplicar formato estructurado
             formatted_response = self.format_response(raw_response)
             
-            # Log del uso del modelo
-            logger.info(f"✅ Respuesta generada con {model} - Tokens: {response.usage.total_tokens if response.usage else 'N/A'}")
             logger.info(f"📝 Longitud respuesta: {len(raw_response)} -> {len(formatted_response)} caracteres")
+            logger.info(f"📋 Primeros 100 chars: {raw_response[:100]}...")
             
             return formatted_response
             
         except Exception as e:
-            logger.error(f"Error al generar respuesta con Groq: {e}")
+            logger.error(f"❌❌❌ ERROR en Groq API: {e}")
+            logger.error(f"📌 Stack trace completo:", exc_info=True)
             return self._get_fallback_response(text)
     
     def _determine_complexity(self, text: str, symptom: str = None) -> str:
@@ -257,7 +264,7 @@ class GroqAIService(AIServiceStrategy):
                 return 'crisis'
         
         complex_symptoms = ["Ansiedad", "Depresión", "Estrés", "Problemas familiares", "Problemas de pareja"]
-        if len(text) > 150 or (symptoma and symptom in complex_symptoms):
+        if len(text) > 150 or (symptom and symptom in complex_symptoms):
             return 'complejo'
         
         return 'normal'

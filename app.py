@@ -308,71 +308,6 @@ def seleccionar_modelo_groq(longitud_texto: int, complejidad_tema: str) -> str:
     else:
         return "openai/gpt-oss-20b"
 
-def formatear_respuesta_estructurada(texto: str) -> str:
-    """
-    Formatea la respuesta de la IA para separar ideas y consejos de manera clara
-    
-    Args:
-        texto: Texto de respuesta generado por la IA
-    
-    Returns:
-        str: Texto formateado con estructura mejorada
-    """
-    if not texto:
-        return texto
-    
-    # Patrones para detectar diferentes tipos de contenido
-    patrones_consejos = [
-        r'(\d+[\.\)]?\s*)',  # 1. 2) etc.
-        r'[•\-]\s*',         # • - 
-        r'Consejo\s*\d*:',   # Consejo 1:
-        r'Recomendación\s*\d*:',  # Recomendación 2:
-        r'Sugerencia\s*\d*:',     # Sugerencia 3:
-        r'💡',                # Emoji de bombilla
-        r'⭐',                # Emoji de estrella
-        r'📝',               # Emoji de notas
-    ]
-    
-    # Dividir el texto en párrafos
-    parrafos = texto.split('\n\n')
-    texto_formateado = []
-    
-    for parrafo in parrafos:
-        parrafo = parrafo.strip()
-        if not parrafo:
-            continue
-            
-        # Verificar si el párrafo contiene consejos numerados o con viñetas
-        es_lista_consejos = any(re.search(patron, parrafo) for patron in patrones_consejos)
-        
-        if es_lista_consejos:
-            # Mejorar el formato de listas
-            lineas = parrafo.split('\n')
-            for linea in lineas:
-                linea = linea.strip()
-                if linea:
-                    
-                    if re.match(r'(\d+[\.\)])', linea):
-                        linea = f"⭐ {linea}"
-                    elif re.match(r'[•\-]', linea):
-                        linea = f"💡 {linea[1:].strip() if linea.startswith('•') or linea.startswith('-') else linea}"
-                    elif 'consejo' in linea.lower() or 'recomendación' in linea.lower() or 'sugerencia' in linea.lower():
-                        linea = f"📝 {linea}"
-                    
-                    texto_formateado.append(linea)
-            texto_formateado.append("")  # Línea en blanco entre secciones
-        else:
-            # Párrafos normales
-            texto_formateado.append(parrafo)
-            texto_formateado.append("")  # Línea en blanco entre párrafos
-    
-    # Unir todo y limpiar líneas en blanco excesivas
-    resultado = '\n'.join(texto_formateado).strip()
-    
-    # Asegurar que no haya más de 2 líneas en blanco consecutivas
-    resultado = re.sub(r'\n\s*\n\s*\n+', '\n\n', resultado)
-    
-    return resultado
 
 def generar_respuesta_groq(texto: str, sintoma: str = None) -> str:
     """
@@ -405,14 +340,11 @@ def generar_respuesta_groq(texto: str, sintoma: str = None) -> str:
         elif len(texto) > 150 or (sintoma and sintoma in ["Ansiedad", "Depresión", "Estrés", "Problemas familiares", "Problemas de pareja"]):
             complejidad = "complejo"
         
-        # Generar respuesta usando el servicio de IA
-        respuesta_bruta = ai_service.generate_response(texto, sintoma, complejidad)
-        
-        # Aplicar formato estructurado a la respuesta
-        respuesta_formateada = formatear_respuesta_estructurada(respuesta_bruta)
+        # Generar respuesta usando el servicio de IA (YA INCLUYE FORMATEO INTERNO)
+        respuesta_formateada = ai_service.generate_response(texto, sintoma, complejidad)
         
         # Log del uso del servicio
-        app.logger.info(f"✅ Respuesta generada con servicio de IA - Longitud: {len(respuesta_bruta)} -> {len(respuesta_formateada)} caracteres")
+        app.logger.info(f"✅ Respuesta generada con servicio de IA - Longitud: {len(respuesta_formateada)} caracteres")
         
         # 2. Guardar respuesta en caché para futuras consultas similares
         guardar_respuesta_cache(texto, sintoma, respuesta_formateada)
@@ -452,11 +384,8 @@ def generar_respuesta_llm(prompt: str, sintoma: str = None) -> str:
         elif len(prompt) > 150 or (sintoma and sintoma in ["Ansiedad", "Depresión", "Estrés", "Problemas familiares", "Problemas de pareja"]):
             complejidad = "complejo"
         
-        # Generar respuesta usando el servicio de IA
-        respuesta_bruta = ai_service.generate_response(prompt, sintoma, complejidad)
-        
-        # Aplicar formato estructurado a la respuesta
-        respuesta_formateada = formatear_respuesta_estructurada(respuesta_bruta)
+        # Generar respuesta usando el servicio de IA (YA INCLUYE FORMATEO INTERNO)
+        respuesta_formateada = ai_service.generate_response(prompt, sintoma, complejidad)
         
         return respuesta_formateada
     
