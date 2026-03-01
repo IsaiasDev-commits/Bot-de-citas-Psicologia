@@ -318,11 +318,15 @@ class ConversationService:
     
     def get_template_data(self) -> Dict[str, Any]:
         """Obtiene todos los datos necesarios para renderizar la plantilla"""
-        # Sintomas disponibles (hardcodeado por ahora)
+        # Sintomas disponibles (deben coincidir con los de app.py)
         sintomas_disponibles = [
-            "Ansiedad", "Depresión", "Estrés", "Problemas de sueño",
-            "Baja autoestima", "Duelo", "Problemas de pareja",
-            "Problemas familiares", "Adicciones", "Trastornos alimenticios"
+            "Ansiedad", "Tristeza", "Estrés", "Soledad", "Miedo", "Culpa", "Inseguridad",
+            "Enojo", "Agotamiento emocional", "Falta de motivación", "Problemas de sueño",
+            "Dolor corporal", "Preocupación excesiva", "Cambios de humor", "Apatía",
+            "Sensación de vacío", "Pensamientos negativos", "Llanto frecuente",
+            "Dificultad para concentrarse", "Desesperanza", "Tensión muscular",
+            "Taquicardia", "Dificultad para respirar", "Problemas de alimentación",
+            "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
         ]
         
         estado_actual = session.get("estado", "inicio")
@@ -333,10 +337,16 @@ class ConversationService:
             conversacion_data = session["conversacion_data"]
             conversacion_historial = conversacion_data.get("interacciones", [])
         
+        # Crear objeto conversacion con estructura compatible con la plantilla
+        # La plantilla espera conversacion.historial, no conversacion directamente
+        conversacion_obj = type('Conversacion', (), {
+            'historial': conversacion_historial
+        })()
+        
         return {
             "estado": estado_actual,
             "sintomas": sintomas_disponibles,
-            "conversacion": conversacion_historial,
+            "conversacion": conversacion_obj,  # Objeto con atributo historial
             "sintoma_actual": session.get("sintoma_actual"),
             "fechas_validas": session.get("fechas_validas", {})
         }
