@@ -338,16 +338,25 @@ class ConversationService:
             success, message, evento_url = agendar_cita_completa(fecha, hora, telefono, sintoma)
             
             if success:
-                # Crear mensaje de éxito
-                mensaje = (
+                # Crear mensajes de confirmación (coherentes con app.py)
+                mensaje_confirmacion = (
                     f"✅ **Cita confirmada**\n\n"
                     f"📅 **Fecha:** {fecha}\n"
                     f"⏰ **Hora:** {hora}\n"
                     f"📱 **Teléfono:** {telefono}\n\n"
-                    f"Recibirás una llamada para coordinar tu consulta. ¡Gracias por confiar en Equilibra! 🌟"
+                    f"Tu cita ha sido registrada correctamente."
                 )
                 
-                self.add_bot_interaction(mensaje, None)
+                mensaje_cierre = (
+                    f"💚 **Gracias por agendar con Equilibra**\n\n"
+                    f"Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
+                    f"Gracias por confiar en este espacio."
+                )
+                
+                # Agregar ambos mensajes al historial
+                self.add_bot_interaction(mensaje_confirmacion, None)
+                self.add_bot_interaction(mensaje_cierre, None)
+                
                 logger.info(f"Cita agendada exitosamente: {fecha} {hora} para {telefono}")
                 return True, "Cita agendada exitosamente"
             else:

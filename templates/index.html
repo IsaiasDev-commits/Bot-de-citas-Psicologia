@@ -1533,8 +1533,8 @@
           const data = await response.json();
           
           if (response.ok) {
-            // Éxito: recargar página para mostrar mensaje de confirmación
-            window.location.reload();
+            // Éxito: redirigir a la página principal para mostrar estado final
+            window.location.href = "/";
           } else {
             // Error: mostrar mensaje específico
             alert(`Error: ${data.error || 'No se pudo agendar la cita'}`);

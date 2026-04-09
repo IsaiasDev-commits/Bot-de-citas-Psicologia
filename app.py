@@ -1281,6 +1281,47 @@ def agendar_cita():
                 del horarios_cache[cache_key]
             
         app.logger.info(f"✅ Cita agendada exitosamente: {fecha} {hora} para {telefono}")
+        
+        # Actualizar sesión para mostrar estado final
+        if "conversacion_data" not in session:
+            session["conversacion_data"] = {"interacciones": []}
+        
+        # Agregar mensajes de confirmación al historial
+        mensaje_confirmacion = (
+            f"✅ **Cita confirmada**\n\n"
+            f"📅 **Fecha:** {fecha}\n"
+            f"⏰ **Hora:** {hora}\n"
+            f"📱 **Teléfono:** {telefono}\n\n"
+            f"Tu cita ha sido registrada correctamente."
+        )
+        
+        mensaje_cierre = (
+            f"💚 **Gracias por agendar con Equilibra**\n\n"
+            f"Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
+            f"Gracias por confiar en este espacio."
+        )
+        
+        # Agregar mensajes al historial
+        conversacion_data = session["conversacion_data"]
+        conversacion_data.setdefault("interacciones", []).extend([
+            {
+                "tipo": "bot",
+                "mensaje": mensaje_confirmacion,
+                "sintoma": sintoma,
+                "timestamp": datetime.now().isoformat()
+            },
+            {
+                "tipo": "bot",
+                "mensaje": mensaje_cierre,
+                "sintoma": sintoma,
+                "timestamp": datetime.now().isoformat()
+            }
+        ])
+        
+        # Cambiar estado a final
+        session["estado"] = "fin"
+        session["conversacion_data"] = conversacion_data
+        
         return jsonify({
             "status": "success",
             "message": "Cita agendada exitosamente",
