@@ -1481,21 +1481,71 @@
       });
 
       citaForm?.addEventListener('submit', async function(e) {
+        e.preventDefault(); // Prevenir envío tradicional
+        
         const horaSeleccionada = horaSeleccionadaInput.value;
-        if (horaSeleccionada) {
-          const { disponible, mensaje } = await verificarDisponibilidad(
-            fechaCitaInput.value, 
-            horaSeleccionada
-          );
+        const fecha = fechaCitaInput.value;
+        const telefono = telefonoInput.value;
+        
+        if (!horaSeleccionada || !fecha || !telefono) {
+          alert('Por favor completa todos los campos requeridos.');
+          return;
+        }
+        
+        // Validar teléfono localmente primero
+        if (!validarTelefono(telefono)) {
+          telefonoInput.classList.add('error');
+          if (telefonoError) telefonoError.style.display = 'block';
+          telefonoInput.focus();
+          return;
+        }
+        
+        // Verificar disponibilidad final
+        const { disponible, mensaje } = await verificarDisponibilidad(fecha, horaSeleccionada);
+        if (!disponible) {
+          alert(`No se puede agendar: ${mensaje || 'El horario ya está ocupado'}`);
+          await cargarHorariosDisponibles(fecha);
+          return;
+        }
+        
+        // Mostrar indicador de carga
+        const submitBtn = document.getElementById('submitCita');
+        const originalText = submitBtn.value;
+        submitBtn.value = 'Agendando...';
+        submitBtn.disabled = true;
+        
+        try {
+          // Enviar datos al endpoint real
+          const response = await fetch('/agendar-cita', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+              fecha: fecha,
+              hora: horaSeleccionada,
+              telefono: telefono,
+              sintoma: '{{ sintoma_actual or "Consulta psicológica" }}'
+            })
+          });
           
-          if (!disponible) {
-            e.preventDefault();
-            alert(`No se puede agendar: ${mensaje || 'El horario ya está ocupado'}`);
-            await cargarHorariosDisponibles(fechaCitaInput.value);
+          const data = await response.json();
+          
+          if (response.ok) {
+            // Éxito: recargar página para mostrar mensaje de confirmación
+            window.location.reload();
+          } else {
+            // Error: mostrar mensaje específico
+            alert(`Error: ${data.error || 'No se pudo agendar la cita'}`);
+            submitBtn.value = originalText;
+            submitBtn.disabled = false;
           }
-        } else {
-          e.preventDefault();
-          alert('Por favor selecciona un horario disponible.');
+        } catch (error) {
+          console.error('Error:', error);
+          alert('Error de conexión. Por favor intenta nuevamente.');
+          submitBtn.value = originalText;
+          submitBtn.disabled = false;
         }
       });
 

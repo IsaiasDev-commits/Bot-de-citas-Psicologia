@@ -326,20 +326,37 @@ class ConversationService:
             return 0
     
     def schedule_appointment(self, fecha: str, hora: str, telefono: str) -> Tuple[bool, str]:
-        """Agenda una cita (simplificado - la lógica real está en app.py)"""
-        # Simulación de agendamiento exitoso
+        """Agenda una cita usando la lógica real del appointment_service"""
         try:
-            mensaje = (
-                f"✅ **Cita confirmada**\n\n"
-                f"📅 **Fecha:** {fecha}\n"
-                f"⏰ **Hora:** {hora}\n"
-                f"📱 **Teléfono:** {telefono}\n\n"
-                f"Recibirás una llamada para coordinar tu consulta. ¡Gracias por confiar en Equilibra! 🌟"
-            )
+            # Importar el servicio de agendamiento
+            from .appointment_service import agendar_cita_completa
             
-            self.add_bot_interaction(mensaje, None)
-            logger.info(f"Cita agendada exitosamente: {fecha} {hora} para {telefono}")
-            return True, "Cita agendada exitosamente"
+            # Obtener síntoma actual de la sesión
+            sintoma = session.get("sintoma_actual", "Consulta psicológica")
+            
+            # Usar la función completa de agendamiento
+            success, message, evento_url = agendar_cita_completa(fecha, hora, telefono, sintoma)
+            
+            if success:
+                # Crear mensaje de éxito
+                mensaje = (
+                    f"✅ **Cita confirmada**\n\n"
+                    f"📅 **Fecha:** {fecha}\n"
+                    f"⏰ **Hora:** {hora}\n"
+                    f"📱 **Teléfono:** {telefono}\n\n"
+                    f"Recibirás una llamada para coordinar tu consulta. ¡Gracias por confiar en Equilibra! 🌟"
+                )
+                
+                self.add_bot_interaction(mensaje, None)
+                logger.info(f"Cita agendada exitosamente: {fecha} {hora} para {telefono}")
+                return True, "Cita agendada exitosamente"
+            else:
+                logger.error(f"Error al agendar cita: {message}")
+                return False, message
+            
+        except ImportError as e:
+            logger.error(f"Error importando appointment_service: {e}")
+            return False, "Error interno del sistema"
         except Exception as e:
             logger.error(f"Error al agendar cita: {e}")
             return False, str(e)

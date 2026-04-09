@@ -33,6 +33,16 @@ import resend
 from services.ai_service import AIServiceFactory, AIServiceStrategy
 from services.validation_service import ValidationService
 from services.conversation_service import ConversationService
+from services.appointment_service import (
+    validar_telefono,
+    validar_horario_cita,
+    verificar_disponibilidad_atomica,
+    crear_evento_calendar,
+    enviar_correo_confirmacion,
+    agendar_cita_completa,
+    get_calendar_service,
+    parsear_fecha_google
+)
 
 # Cargar variables de entorno desde .env
 load_dotenv()
@@ -201,12 +211,7 @@ def guardar_respuesta_cache(texto: str, sintoma: str = None, respuesta: str = ""
 
 # ==================== FUNCIONES DE VALIDACIÓN DE HORARIOS ====================
 
-def validar_horario_cita(fecha_str: str, hora_str: str) -> Tuple[bool, str]:
-    """
-    Validación estricta de horarios de cita usando el servicio de validación mejorado
-    (Template Method Pattern)
-    """
-    return validation_service.validate_appointment_time(fecha_str, hora_str)
+# Nota: validar_horario_cita ahora importada desde services.appointment_service
 
 def obtener_horarios_disponibles_estrictos(fecha_str: str) -> List[Dict[str, Any]]:
     """
@@ -400,11 +405,7 @@ def sanitizar_input(texto):
     texto = re.sub(r'[<>{}[\]();]', '', texto)
     return texto[:500] if len(texto) > 500 else texto
 
-def validar_telefono(telefono) -> Tuple[bool, str]:
-    """
-    Validar teléfono usando el servicio de validación
-    """
-    return validation_service.validate_phone(telefono)
+# Nota: validar_telefono ahora importada desde services.appointment_service
 
 def calcular_duracion_dias(fecha_str):
     if not fecha_str:
@@ -972,297 +973,13 @@ class SistemaConversacional:
                     ultima_respuesta_bot['mensaje']
                 )
 
-def get_calendar_service():
-    try:
-        google_credentials = os.getenv('GOOGLE_CREDENTIALS')
-        if not google_credentials:
-            app.logger.error("❌ GOOGLE_CREDENTIALS no configuradas")
-            return None
-        
-        # Limpiar y verificar credenciales
-        google_credentials = google_credentials.strip()
-        app.logger.info(f"Longitud de credenciales: {len(google_credentials)}")
-        
-        try:
-            creds_dict = json.loads(google_credentials)
-            app.logger.info("✅ Credenciales JSON parseadas correctamente")
-        except json.JSONDecodeError as e:
-            app.logger.error(f"❌ Error parseando JSON: {e}")
-            app.logger.error(f"Primeros 100 caracteres: {google_credentials[:100]}")
-            return None
-            
-        # Verificar campos requeridos
-        required_fields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email']
-        missing_fields = [field for field in required_fields if field not in creds_dict]
-        
-        if missing_fields:
-            app.logger.error(f"❌ Campos faltantes: {missing_fields}")
-            return None
-        
-        # Crear credenciales
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=['https://www.googleapis.com/auth/calendar']
-        )
-        
-        service = build('calendar', 'v3', credentials=creds, cache_discovery=False)
-        app.logger.info("✅ Servicio de calendario creado exitosamente")
-        return service
-        
-    except Exception as e:
-        app.logger.error(f"❌ Error al obtener servicio de calendario: {e}")
-        return None
-
-def crear_evento_calendar(fecha, hora, telefono, sintoma):
-    try:
-        # Validar fecha y hora
-        datetime.strptime(fecha, "%Y-%m-%d")
-        datetime.strptime(hora, "%H:%M")
-        
-        service = get_calendar_service()
-        if not service:
-            app.logger.error("No se pudo obtener el servicio de calendario")
-            return None
-            
-        # Crear el evento con este formato 
-        start_time = f"{fecha}T{hora}:00-05:00"
-        end_time = f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00"
-        
-        event = {
-            'summary': f'Cita Psicológica - {sintoma}',
-            'description': f'Teléfono del paciente: {telefono}\nSíntoma principal: {sintoma}\nCita agendada a través de Equilibra',
-            'start': {
-                'dateTime': start_time,
-                'timeZone': 'America/Guayaquil',
-            },
-            'end': {
-                'dateTime': end_time,
-                'timeZone': 'America/Guayaquil',
-            },
-            'reminders': {
-                'useDefault': False,
-                'overrides': [
-                    {'method': 'email', 'minutes': 24 * 60},  # 1 día antes
-                    {'method': 'popup', 'minutes': 30},       # 30 minutos antes
-                ],
-            },
-        }
-        
-        app.logger.info(f"Intentando crear evento: {fecha} {hora} para {telefono}")
-        
-        # Intentar crear el evento
-        event_created = service.events().insert(
-            calendarId='primary',
-            body=event
-        ).execute()
-        
-        evento_url = event_created.get('htmlLink')
-        app.logger.info(f"✅ Evento creado exitosamente: {evento_url}")
-        
-        return evento_url
-        
-    except ValueError as ve:
-        app.logger.error(f"❌ Formato de fecha/hora inválido: {ve}")
-        return None
-    except HttpError as error:
-        app.logger.error(f"❌ Error de Google Calendar API: {error}")
-        # Mostrar más detalles del error
-        if error.resp.status == 403:
-            app.logger.error("❌ Error 403: Permisos insuficientes. Verifica que la cuenta de servicio tenga permisos de escritura.")
-        elif error.resp.status == 404:
-            app.logger.error("❌ Error 404: Calendario no encontrado.")
-        return None
-    except Exception as e:
-        app.logger.error(f"❌ Error inesperado al crear evento: {e}")
-        return None
-
-def parsear_fecha_google(event):
-    """
-    Nueva función para parsear fechas de Google Calendar usando dateutil.parser
-    """
-    try:
-        fecha_inicio = parser.isoparse(event["start"]["dateTime"])
-        fecha_fin = parser.isoparse(event["end"]["dateTime"])
-        return fecha_inicio, fecha_fin
-    except Exception as e:
-        app.logger.error(f"Error parseando fecha de Google Calendar: {e}")
-        return None, None
-
-def enviar_correo_confirmacion(destinatario, fecha, hora, telefono, sintoma):
-    """
-    Versión para Resend que funciona en Render
-    """
-    destinatario = "chatbotequilibra@gmail.com"
-    try:
-        resend_api_key = os.getenv('RESEND_API_KEY')
-        
-        if resend_api_key:
-            # Usar Resend API
-            return enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma)
-        else:
-            # Fallback: solo loggear 
-            app.logger.info(f"📧 Simulando envío de email a {destinatario}")
-            app.logger.info(f"   Cita: {fecha} {hora} - Tel: {telefono} - Síntoma: {sintoma}")
-            return True
-            
-    except Exception as e:
-        app.logger.warning(f"⚠️ Email no enviado (pero no crítico): {e}")
-        return True  
-
-def enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma):
-    """
-    Usar Resend API para enviar emails (funciona en Render)
-    """
-    destinatario = "chatbotequilibra@gmail.com"
-    try:
-        resend_api_key = os.getenv('RESEND_API_KEY')
-        
-        if not resend_api_key:
-            app.logger.warning("Credenciales de Resend no configuradas")
-            return False
-            
-        # Configurar la API key de Resend
-        resend.api_key = resend_api_key
-        
-        mensaje = f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #4CAF82; text-align: center;">📅 NUEVA CITA AGENDADA - EQUILIBRA</h2>
-            
-            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                <p><strong>Fecha:</strong> {fecha}</p>
-                <p><strong>Hora:</strong> {hora}</p>
-                <p><strong>Teléfono:</strong> {telefono}</p>
-                <p><strong>Síntoma principal:</strong> {sintoma}</p>
-            </div>
-            
-            <p>La cita ha sido registrada exitosamente en el calendario de Google.</p>
-            <p>Por favor contacta al paciente para confirmar los detalles.</p>
-            
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #4CAF82;">
-                <p>Saludos,<br>
-                <strong>Equilibra</strong> - Sistema de Citas Psicológicas</p>
-            </div>
-        </div>
-        """
-        
-        # Enviar el email
-        respuesta = resend.Emails.send({
-            "from": "Equilibra <onboarding@resend.dev>",
-            "to": destinatario,
-            "subject": f"✅ Nueva cita agendada - {fecha} {hora}",
-            "html": mensaje
-        })
-
-        app.logger.info(f"✅ Correo enviado correctamente via Resend: {respuesta}")
-        return True
-            
-    except Exception as e:
-        app.logger.error(f"❌ Error enviando correo con Resend: {e}")
-        return False
-
-def limpiar_datos_aprendizaje():
-    try:
-        while True:
-            time.sleep(24 * 60 * 60)
-            
-            sistema_aprendizaje = SistemaAprendizaje()
-            if not sistema_aprendizaje.respuestas_efectivas:
-                continue
-            
-            for sintoma in list(sistema_aprendizaje.respuestas_efectivas.keys()):
-                for respuesta in list(sistema_aprendizaje.respuestas_efectivas[sintoma].keys()):
-                    stats = sistema_aprendizaje.respuestas_efectivas[sintoma][respuesta]
-                    ultimo_uso = datetime.fromisoformat(stats['ultimo_uso'])
-                    
-                    if (datetime.now() - ultimo_uso).days > 30 or stats['veces_usada'] < 2:
-                        del sistema_aprendizaje.respuestas_efectivas[sintoma][respuesta]
-                
-                if not sistema_aprendizaje.respuestas_efectivas[sintoma]:
-                    del sistema_aprendizaje.respuestas_efectivas[sintoma]
-            
-            sistema_aprendizaje.guardar_aprendizaje()
-            app.logger.info("Limpieza automática de datos de aprendizaje completada")
-            
-    except Exception as e:
-        app.logger.error(f"Error limpiando datos de aprendizaje: {e}")
-
-def limpiar_cache_horarios():
-    try:
-        while True:
-            time.sleep(3600)
-            with cache_lock:
-                now = time.time()
-                keys_to_delete = []
-                for key, (timestamp, _) in horarios_cache.items():
-                    if now - timestamp > 1800:
-                        keys_to_delete.append(key)
-                
-                for key in keys_to_delete:
-                    del horarios_cache[key]
-                
-                app.logger.info(f"Cache de horarios limpiado. Eliminadas {len(keys_to_delete)} entradas.")
-    except Exception as e:
-        app.logger.error(f"Error limpiando cache de horarios: {e}")
-
-def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
-    """Verificación atómica estricta con todas las validaciones"""
-    try:
-        # 1. Validación básica de formato
-        datetime.strptime(fecha, "%Y-%m-%d")
-        datetime.strptime(hora, "%H:%M")
-        
-        # 2. Validación estricta de horario
-        es_valido, mensaje = validar_horario_cita(fecha, hora)
-        if not es_valido:
-            app.logger.warning(f"❌ Validación fallida para {fecha} {hora}: {mensaje}")
-            return {"disponible": False, "error": mensaje}
-        
-        # 3. Verificar disponibilidad en Google Calendar
-        service = get_calendar_service()
-        if not service:
-            return {"disponible": False, "error": "Servicio no disponible"}
-            
-        start_time = f"{fecha}T{hora}:00-05:00"
-        end_time = f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00"
-        
-        # Verificación estricta de eventos
-        time_min = f"{fecha}T00:00:00-05:00"
-        time_max = f"{fecha}T23:59:59-05:00"
-        
-        eventos = service.events().list(
-            calendarId='primary',
-            timeMin=time_min,
-            timeMax=time_max,
-            singleEvents=True,
-            maxResults=50,
-            orderBy='startTime'
-        ).execute()
-        
-        
-        hora_solicitada_start = parser.isoparse(start_time)
-        hora_solicitada_end = parser.isoparse(end_time)
-        
-        for evento in eventos.get('items', []):
-            evento_start_str = evento['start'].get('dateTime', evento['start'].get('date'))
-            evento_end_str = evento['end'].get('dateTime', evento['end'].get('date'))
-            
-            if 'T' in evento_start_str:
-                try:
-                    # Usar la nueva función de parseo
-                    fecha_inicio, fecha_fin = parsear_fecha_google(evento)
-                    if fecha_inicio and fecha_fin:
-                        if (fecha_inicio < hora_solicitada_end and fecha_fin > hora_solicitada_start):
-                            app.logger.warning(f"❌ Verificación atómica: Horario {hora} ocupado por {evento.get('summary', 'Sin título')}")
-                            return {"disponible": False, "error": "Horario ya ocupado"}
-                except ValueError:
-                    continue
-        
-        app.logger.info(f"✅ Horario {fecha} {hora} disponible y válido")
-        return {"disponible": True}
-        
-    except Exception as e:
-        app.logger.error(f"Error en verificación atómica: {e}")
-        return {"disponible": False, "error": str(e)}
+# Nota: Las funciones de agendamiento ahora están en services.appointment_service
+# - get_calendar_service()
+# - crear_evento_calendar()
+# - parsear_fecha_google()
+# - enviar_correo_confirmacion()
+# - enviar_correo_resend()
+# - verificar_disponibilidad_atomica()
 
 # Endpoints de diagnóstico
 @app.route('/debug-env')
@@ -1545,37 +1262,19 @@ def agendar_cita():
         telefono = data["telefono"]
         sintoma = data["sintoma"]
         
-        # 1. Validar teléfono
-        valido, mensaje_error = validar_telefono(telefono)
-        if not valido:
-            return jsonify({"error": mensaje_error}), 400
+        # Usar la función completa de agendamiento
+        success, message, evento_url = agendar_cita_completa(fecha, hora, telefono, sintoma)
         
-        # 2. Validación estricta de horario
-        es_valido, mensaje_validacion = validar_horario_cita(fecha, hora)
-        if not es_valido:
-            return jsonify({"error": mensaje_validacion}), 400
+        if not success:
+            # Determinar código de error apropiado
+            if "inválido" in message.lower() or "formato" in message.lower():
+                return jsonify({"error": message}), 400
+            elif "no disponible" in message.lower() or "ocupado" in message.lower():
+                return jsonify({"error": message}), 409
+            else:
+                return jsonify({"error": message}), 500
         
-        # 3. Revisar disponibilidad justo antes de agendar (VERIFICACIÓN ESTRICTA)
-        verificacion = verificar_disponibilidad_atomica(fecha, hora)
-        if not verificacion["disponible"]:
-            return jsonify({"error": verificacion.get("error", "El horario ya no está disponible")}), 409
-        
-        # 4. Crear evento en calendario
-        evento_url = crear_evento_calendar(fecha, hora, telefono, sintoma)
-        
-        if not evento_url:
-            return jsonify({"error": "Error al crear la cita en el calendario"}), 500
-            
-        # 5. Enviar correo de confirmación (no bloqueante)
-        enviar_correo_confirmacion(
-            "chatbotequilibra@gmail.com",
-            fecha,
-            hora,
-            telefono,
-            sintoma
-        )
-            
-        # 6. Limpiar cache para esta fecha/hora
+        # Limpiar cache para esta fecha/hora
         with cache_lock:
             cache_key = f"{fecha}_{hora}"
             if cache_key in horarios_cache:
