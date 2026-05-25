@@ -19,9 +19,12 @@ def login():
             flash("Por favor completa todos los campos.", "error")
             return render_template("login.html")
 
-        user = User.query.filter_by(email=email, is_active=True).first()
+        user = db.session.execute(
+            db.select(User).filter_by(email=email)
+        ).scalar_one_or_none()
 
-        if user and user.check_password(password):
+
+        if user and user.is_active and user.check_password(password):
             user.last_login = datetime.utcnow()
             db.session.commit()
             login_user(user, remember=remember)
