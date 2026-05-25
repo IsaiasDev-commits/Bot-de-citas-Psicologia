@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Equilibra Admin{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_subtitle %}Resumen general del día{% endblock %}
+
+{% block content %}
+<!-- Stats grid -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+  <div class="stat-card">
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Total pacientes</p>
+      <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </div>
+    </div>
+    <p class="text-3xl font-bold text-slate-800">{{ stats.total_patients }}</p>
+    {% if stats.new_today > 0 %}
+    <p class="text-xs text-green-600 font-medium mt-1">+{{ stats.new_today }} hoy</p>
+    {% else %}
+    <p class="text-xs text-slate-400 mt-1">Sin nuevos hoy</p>
+    {% endif %}
+  </div>
+
+  <div class="stat-card">
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Citas hoy</p>
+      <div class="w-8 h-8 bg-brand-100 rounded-lg flex items-center justify-center">
+        <svg class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+      </div>
+    </div>
+    <p class="text-3xl font-bold text-slate-800">{{ stats.today_appointments }}</p>
+    <p class="text-xs text-slate-400 mt-1">{{ stats.week_appointments }} esta semana</p>
+  </div>
+
+  <div class="stat-card">
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Pendientes</p>
+      <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+    <p class="text-3xl font-bold text-slate-800">{{ stats.pending_count }}</p>
+    <p class="text-xs text-slate-400 mt-1">Requieren confirmación</p>
+  </div>
+
+  <div class="stat-card">
+    <div class="flex items-center justify-between mb-3">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Síntoma líder</p>
+      <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+        <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+      </div>
+    </div>
+    <p class="text-2xl font-bold text-slate-800 truncate">{{ stats.top_symptom }}</p>
+    <p class="text-xs text-slate-400 mt-1">{{ stats.recurring_patients }} pacientes recurrentes</p>
+  </div>
+</div>
+
+<!-- Content grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- Today's appointments -->
+  <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-100">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="font-semibold text-slate-800">Citas de hoy</h2>
+      <a href="{{ url_for('admin.appointments') }}" class="text-xs text-brand-600 hover:text-brand-700 font-medium">Ver todas →</a>
+    </div>
+
+    {% if today_appts %}
+    <div class="divide-y divide-slate-50">
+      {% for appt in today_appts %}
+      <div class="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors">
+        <div class="text-center w-14 flex-shrink-0">
+          <p class="text-lg font-bold text-slate-800 leading-tight">{{ appt.scheduled_at.strftime('%H:%M') }}</p>
+        </div>
+        <div class="flex-1 min-w-0">
+          <a href="{{ url_for('admin.patient_detail', patient_id=appt.patient_id) }}"
+             class="font-medium text-slate-800 hover:text-brand-600 text-sm truncate block">
+            {{ appt.patient.name }}
+          </a>
+          <p class="text-xs text-slate-400 truncate">{{ appt.symptom or 'Sin síntoma' }}</p>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <span class="badge-{{ appt.status }}">{{ appt.status_label }}</span>
+          <div class="relative" x-data="statusDropdown({{ appt.id }}, '{{ appt.status }}')">
+            <button onclick="openStatusMenu({{ appt.id }})"
+              class="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01"/>
+              </svg>
+            </button>
+            <div id="status-menu-{{ appt.id }}" class="hidden absolute right-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-1">
+              {% for s in [('pending','Pendiente'),('confirmed','Confirmada'),('completed','Completada'),('cancelled','Cancelada')] %}
+              <button onclick="changeStatus({{ appt.id }}, '{{ s[0] }}')"
+                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 {% if appt.status == s[0] %}font-semibold{% endif %}">
+                {{ s[1] }}
+              </button>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="flex flex-col items-center justify-center py-16 text-slate-400">
+      <svg class="w-12 h-12 mb-3 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+      </svg>
+      <p class="text-sm font-medium">Sin citas para hoy</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Recent activity -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-100">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h2 class="font-semibold text-slate-800">Nuevas citas (24hs)</h2>
+      <span class="bg-brand-100 text-brand-700 text-xs font-bold px-2 py-0.5 rounded-full">{{ recent_appts|length }}</span>
+    </div>
+
+    {% if recent_appts %}
+    <div class="divide-y divide-slate-50">
+      {% for appt in recent_appts %}
+      <a href="{{ url_for('admin.patient_detail', patient_id=appt.patient_id) }}"
+         class="flex items-start gap-3 px-5 py-3.5 hover:bg-slate-50 transition-colors block">
+        <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+          <span class="text-blue-700 text-xs font-bold">{{ appt.patient.name[0].upper() }}</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-slate-800 truncate">{{ appt.patient.name }}</p>
+          <p class="text-xs text-slate-500">{{ appt.scheduled_at.strftime('%d/%m/%Y %H:%M') }}</p>
+          <p class="text-xs text-slate-400 truncate">{{ appt.symptom or 'Sin síntoma' }}</p>
+        </div>
+        <span class="badge-{{ appt.status }} flex-shrink-0">{{ appt.status_label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+      <p class="text-sm">Sin actividad reciente</p>
+    </div>
+    {% endif %}
+
+    <div class="px-5 py-3 border-t border-slate-100">
+      <a href="{{ url_for('admin.appointments') }}" class="block text-center text-xs text-brand-600 hover:text-brand-700 font-medium">
+        Ver historial completo →
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openStatusMenu(id) {
+  document.querySelectorAll('[id^="status-menu-"]').forEach(m => {
+    if (m.id !== `status-menu-${id}`) m.classList.add('hidden');
+  });
+  document.getElementById(`status-menu-${id}`).classList.toggle('hidden');
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('[id^="status-menu-"]') && !e.target.closest('button[onclick^="openStatusMenu"]')) {
+    document.querySelectorAll('[id^="status-menu-"]').forEach(m => m.classList.add('hidden'));
+  }
+});
+
+async function changeStatus(id, status) {
+  document.getElementById(`status-menu-${id}`).classList.add('hidden');
+  try {
+    const r = await fetch(`/admin/api/appointments/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() },
+      body: JSON.stringify({ status }),
+    });
+    if (r.ok) location.reload();
+    else alert('Error al actualizar el estado');
+  } catch { alert('Error de red'); }
+}
+
+function getCsrfToken() {
+  return document.querySelector('meta[name="csrf-token"]')?.content ||
+    document.querySelector('input[name="csrf_token"]')?.value || '';
+}
+</script>
+{% endblock %}

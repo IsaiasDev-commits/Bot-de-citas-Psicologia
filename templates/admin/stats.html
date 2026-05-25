@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Estadísticas — Equilibra Admin{% endblock %}
+{% block page_title %}Estadísticas{% endblock %}
+{% block page_subtitle %}Análisis general de la clínica{% endblock %}
+
+{% block content %}
+<!-- Summary cards -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <div class="stat-card">
+    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Total pacientes</p>
+    <p class="text-4xl font-bold text-slate-800">{{ stats.total_patients }}</p>
+    <p class="text-xs text-slate-400 mt-1">{{ stats.recurring_patients }} recurrentes</p>
+  </div>
+  <div class="stat-card">
+    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Citas esta semana</p>
+    <p class="text-4xl font-bold text-slate-800">{{ stats.week_appointments }}</p>
+    <p class="text-xs text-slate-400 mt-1">{{ stats.today_appointments }} hoy</p>
+  </div>
+  <div class="stat-card">
+    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Pendientes</p>
+    <p class="text-4xl font-bold text-amber-600">{{ stats.pending_count }}</p>
+    <p class="text-xs text-slate-400 mt-1">Requieren atención</p>
+  </div>
+  <div class="stat-card">
+    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Síntoma líder</p>
+    <p class="text-xl font-bold text-slate-800 leading-tight mt-1">{{ stats.top_symptom }}</p>
+    <p class="text-xs text-slate-400 mt-1">Más frecuente</p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- Symptoms chart -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <h2 class="font-semibold text-slate-800 mb-5">Síntomas más frecuentes</h2>
+    {% if symptom_stats %}
+    <div class="space-y-3">
+      {% for item in symptom_stats %}
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm text-slate-700 font-medium truncate flex-1 mr-3">{{ item.symptom }}</span>
+          <span class="text-xs font-bold text-slate-500 flex-shrink-0">{{ item.count }} ({{ item.pct }}%)</span>
+        </div>
+        <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+          <div class="h-full rounded-full transition-all duration-500
+            {% if loop.index == 1 %}bg-brand-500
+            {% elif loop.index == 2 %}bg-blue-500
+            {% elif loop.index == 3 %}bg-purple-500
+            {% elif loop.index == 4 %}bg-amber-500
+            {% elif loop.index == 5 %}bg-red-400
+            {% else %}bg-slate-400{% endif %}"
+            style="width: {{ item.pct }}%">
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="flex items-center justify-center py-12 text-slate-400">
+      <p class="text-sm">Sin datos suficientes aún</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Monthly appointments chart -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <h2 class="font-semibold text-slate-800 mb-5">Citas por mes (últimos 6 meses)</h2>
+    {% if monthly_data %}
+    <div class="flex items-end gap-3 h-40 mb-3">
+      {% set max_count = monthly_data | map(attribute='count') | max %}
+      {% for item in monthly_data %}
+      <div class="flex flex-col items-center flex-1 gap-1">
+        <span class="text-xs font-bold text-slate-600">{{ item.count }}</span>
+        <div class="w-full rounded-t-md bg-brand-500 hover:bg-brand-600 transition-colors"
+             style="height: {{ ((item.count / max_count) * 120)|int if max_count > 0 else 0 }}px; min-height: 4px;"
+             title="{{ item.month }}: {{ item.count }} citas">
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="flex gap-3">
+      {% for item in monthly_data %}
+      <div class="flex-1 text-center">
+        <span class="text-xs text-slate-400">{{ item.month.split()[0] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="flex items-center justify-center h-40 text-slate-400">
+      <p class="text-sm">Sin datos suficientes aún</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Status distribution -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <h2 class="font-semibold text-slate-800 mb-5">Distribución de estados</h2>
+    {% set status_list = [
+      ('pending', 'Pendiente', 'bg-amber-400', stats.pending_count),
+    ] %}
+    <div class="space-y-3">
+      {% for status, label, color, count in [
+        ('pending', 'Pendiente', 'bg-amber-400', stats.pending_count),
+        ('confirmed', 'Confirmadas', 'bg-blue-400', 0),
+        ('completed', 'Completadas', 'bg-green-400', 0),
+        ('cancelled', 'Canceladas', 'bg-red-400', 0),
+      ] %}
+      <div class="flex items-center gap-3">
+        <span class="w-3 h-3 rounded-full flex-shrink-0 {{ color }}"></span>
+        <span class="text-sm text-slate-700 flex-1">{{ label }}</span>
+        <span class="text-sm font-bold text-slate-600">{{ count }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="text-xs text-slate-400 mt-4">* Estadísticas detalladas disponibles con más datos</p>
+  </div>
+
+  <!-- Quick facts -->
+  <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+    <h2 class="font-semibold text-slate-800 mb-5">Datos rápidos</h2>
+    <div class="space-y-4">
+      <div class="flex items-center justify-between py-2 border-b border-slate-50">
+        <span class="text-sm text-slate-600">Pacientes recurrentes</span>
+        <span class="font-bold text-slate-800">{{ stats.recurring_patients }}</span>
+      </div>
+      <div class="flex items-center justify-between py-2 border-b border-slate-50">
+        <span class="text-sm text-slate-600">Nuevos pacientes hoy</span>
+        <span class="font-bold text-green-600">{{ stats.new_today }}</span>
+      </div>
+      <div class="flex items-center justify-between py-2 border-b border-slate-50">
+        <span class="text-sm text-slate-600">Citas pendientes de confirmación</span>
+        <span class="font-bold text-amber-600">{{ stats.pending_count }}</span>
+      </div>
+      <div class="flex items-center justify-between py-2">
+        <span class="text-sm text-slate-600">Síntoma más frecuente</span>
+        <span class="font-bold text-slate-800 text-right max-w-32 truncate">{{ stats.top_symptom }}</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, session, redirect, url_for, j
 from datetime import datetime, timedelta
 import os
 import smtplib
-import json 
+import json
 import re
 import logging
 import sys
@@ -20,6 +20,7 @@ from environs import Env
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
+from flask_login import LoginManager
 from markupsafe import escape
 import threading
 import time
@@ -48,6 +49,36 @@ from services.appointment_service import (
 load_dotenv()
 
 app = Flask(__name__)
+
+# ==================== BASE DE DATOS (PostgreSQL) ====================
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
+    "DATABASE_URL", "sqlite:///equilibra_dev.db"
+)
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+from models import db, User
+db.init_app(app)
+
+# ==================== FLASK-LOGIN ====================
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "admin.login"
+login_manager.login_message = "Inicia sesión para acceder al panel."
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# ==================== BLUEPRINT ADMIN ====================
+from admin import admin_bp
+app.register_blueprint(admin_bp)
+
+# Crear tablas al iniciar (funciona con gunicorn y waitress)
+with app.app_context():
+    try:
+        db.create_all()
+    except Exception:
+        pass  # Las tablas ya existen o DB no disponible aún
 
 # Configuración desde variables de entorno
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "clave_por_defecto_para_desarrollo")
@@ -1100,6 +1131,28 @@ def index():
 @limiter.limit("50 per hour")
 def reset():
     try:
+        # Guardar conversación en DB antes de limpiar sesión
+        try:
+            conv_data = session.get("conversacion_data", {})
+            interacciones = conv_data.get("interacciones", [])
+            telefono = session.get("telefono_cita")
+            if interacciones:
+                from models import Conversation as ConvModel, Patient
+                from models import db as _db
+                patient = Patient.query.filter_by(phone=telefono).first() if telefono else None
+                symptoms = list({i.get("sintoma") for i in interacciones if i.get("sintoma")})
+                conv = ConvModel(
+                    patient_id=patient.id if patient else None,
+                    session_id=session.get("_id", ""),
+                    ended_at=datetime.utcnow(),
+                )
+                conv.messages = interacciones
+                conv.detected_symptoms = symptoms
+                _db.session.add(conv)
+                _db.session.commit()
+        except Exception as conv_err:
+            app.logger.warning(f"No se pudo guardar conversación en DB: {conv_err}")
+
         session.clear()
         conversacion = SistemaConversacional()
         session["conversacion_data"] = conversacion.to_dict()
@@ -1279,7 +1332,28 @@ def agendar_cita():
             cache_key = f"{fecha}_{hora}"
             if cache_key in horarios_cache:
                 del horarios_cache[cache_key]
-            
+
+        # Guardar cita y paciente en la base de datos
+        try:
+            from services.admin_service import find_or_create_patient
+            from models import Appointment as AppointmentModel
+            patient_name = data.get("nombre", "Paciente")
+            patient = find_or_create_patient(
+                name=patient_name, phone=telefono, symptom=sintoma
+            )
+            scheduled_dt = datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
+            appt = AppointmentModel(
+                patient_id=patient.id,
+                scheduled_at=scheduled_dt,
+                symptom=sintoma,
+                status="pending",
+                calendar_event_id=evento_url,
+            )
+            db.session.add(appt)
+            db.session.commit()
+        except Exception as db_err:
+            app.logger.warning(f"No se pudo guardar cita en DB: {db_err}")
+
         app.logger.info(f"✅ Cita agendada exitosamente: {fecha} {hora} para {telefono}")
         
         # Actualizar sesión para mostrar estado final
@@ -1532,6 +1606,11 @@ def not_found(error):
 
 # Configuración para producción en Render
 if __name__ == "__main__":
+    # Crear tablas de la base de datos si no existen
+    with app.app_context():
+        db.create_all()
+        app.logger.info("✅ Tablas de base de datos verificadas/creadas")
+
     # Verificar variables de entorno en producción
     if os.environ.get('FLASK_ENV') == 'production':
         required_env_vars = ["FLASK_SECRET_KEY", "EMAIL_USER", "EMAIL_PASSWORD", "PSICOLOGO_EMAIL", "GOOGLE_CREDENTIALS", "GROQ_API_KEY"]
