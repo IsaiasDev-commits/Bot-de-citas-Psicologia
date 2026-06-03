@@ -1,7 +1,8 @@
 import logging
 from datetime import datetime
+from dateutil import parser as dateutil_parser
 from models import db, Appointment, Patient
-from services.appointment_service import get_calendar_service, parsear_fecha_google
+from services.appointment_service import get_calendar_service
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +42,10 @@ def sync_from_calendar() -> dict:
             if not start_raw:
                 continue
 
-            scheduled_at = parsear_fecha_google(start_raw)
-            if not scheduled_at:
+            try:
+                scheduled_at = dateutil_parser.isoparse(start_raw)
+            except (ValueError, TypeError):
+                logger.warning(f"No se pudo parsear la fecha del evento: {start_raw}")
                 continue
 
             phone = _extract_phone(description)

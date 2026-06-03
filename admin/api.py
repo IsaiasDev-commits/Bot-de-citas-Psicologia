@@ -3,8 +3,10 @@ from flask import request, jsonify
 from flask_login import current_user
 from models import db, Appointment, Patient, ClinicalNote
 from services.calendar_sync_service import update_calendar_event_status, sync_from_calendar
-from .decorators import login_required_admin
+from .decorators import login_required_admin, admin_required
 from . import admin_bp
+
+_MAX_NOTE_LENGTH = 10_000  # caracteres máximos para notas clínicas
 
 
 @admin_bp.route("/api/appointments/<int:appt_id>/status", methods=["PATCH"])
@@ -40,6 +42,8 @@ def add_clinical_note(patient_id):
 
     if not content:
         return jsonify({"error": "El contenido no puede estar vacío"}), 400
+    if len(content) > _MAX_NOTE_LENGTH:
+        return jsonify({"error": f"El contenido no puede superar {_MAX_NOTE_LENGTH} caracteres"}), 400
 
     note = ClinicalNote(
         patient_id=patient_id,
@@ -61,6 +65,8 @@ def update_clinical_note(patient_id, note_id):
 
     if not content:
         return jsonify({"error": "El contenido no puede estar vacío"}), 400
+    if len(content) > _MAX_NOTE_LENGTH:
+        return jsonify({"error": f"El contenido no puede superar {_MAX_NOTE_LENGTH} caracteres"}), 400
 
     note.content = content
     note.updated_at = datetime.utcnow()
@@ -78,7 +84,7 @@ def delete_clinical_note(patient_id, note_id):
 
 
 @admin_bp.route("/api/calendar/sync", methods=["POST"])
-@login_required_admin
+@admin_required  # Solo admins pueden forzar sincronización
 def calendar_sync():
     result = sync_from_calendar()
     return jsonify(result)
@@ -107,7 +113,10 @@ def check_new_appointments():
 def update_appointment_notes(appt_id):
     appt = Appointment.query.get_or_404(appt_id)
     data = request.get_json(silent=True) or {}
-    appt.psychologist_notes = (data.get("notes") or "").strip()
+    notes = (data.get("notes") or "").strip()
+    if len(notes) > _MAX_NOTE_LENGTH:
+        return jsonify({"error": f"Las notas no pueden superar {_MAX_NOTE_LENGTH} caracteres"}), 400
+    appt.psychologist_notes = notes
     appt.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify({"ok": True})

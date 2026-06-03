@@ -14,6 +14,18 @@ STATUS_LABELS = {
 
 class Appointment(db.Model):
     __tablename__ = "appointments"
+    __table_args__ = (
+        # Evita doble booking: mismo horario no puede tener dos citas activas
+        db.UniqueConstraint(
+            "scheduled_at",
+            name="uq_appointments_scheduled_at_active",
+        ),
+        db.Index("ix_appointments_scheduled_at", "scheduled_at"),
+        db.Index("ix_appointments_status", "status"),
+        db.Index("ix_appointments_patient_id", "patient_id"),
+        db.Index("ix_appointments_created_at", "created_at"),
+        db.Index("ix_appointments_calendar_event_id", "calendar_event_id"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     patient_id = db.Column(db.Integer, db.ForeignKey("patients.id"), nullable=False)

@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, Tuple
 from flask import session, request
 from .ai_service import AIServiceFactory
 from .validation_service import ValidationService
+from constants import SINTOMAS_DISPONIBLES, detectar_crisis, CRISIS_RESPONSE
 
 logger = logging.getLogger(__name__)
 
@@ -185,34 +186,12 @@ class ConversationService:
             "inicio": InitialState(self),
             "evaluacion": EvaluationState(self),
             "profundizacion": DeepeningState(self),
-            "derivacion": DeepeningState(self),  # Mismo comportamiento que profundizacion
+            "derivacion": DeepeningState(self),
             "agendar_cita": AppointmentState(self),
-            "fin": None  # Estado final
+            "fin": None,
         }
-        
-        # Inicializar servicios
-        self.ai_service = None
-        
-        # Verificar si GROQ_API_KEY está configurada
-        import os
-        groq_api_key = os.getenv('GROQ_API_KEY')
-        
-        if groq_api_key:
-            logger.info(f"🔑 GROQ_API_KEY detectada (longitud: {len(groq_api_key)})")
-            logger.info("🔄 Intentando inicializar servicio Groq...")
-            
-            try:
-                self.ai_service = AIServiceFactory.create_service("groq")
-                logger.info("✅✅✅ SERVICIO GROQ INICIALIZADO CORRECTAMENTE ✅✅✅")
-                logger.info(f"📊 Tipo de servicio: {type(self.ai_service).__name__}")
-            except Exception as e:
-                logger.error(f"❌ Error inicializando servicio Groq: {e}")
-                logger.warning("⚠️ Usando servicio de fallback debido a error en Groq")
-                self.ai_service = AIServiceFactory.create_service("fallback")
-        else:
-            logger.warning("⚠️ GROQ_API_KEY NO configurada en variables de entorno")
-            logger.info("📋 Usando servicio de fallback por defecto")
-            self.ai_service = AIServiceFactory.create_service("fallback")
+        # Singleton: se crea una vez y se reutiliza en todos los requests
+        self.ai_service = AIServiceFactory.get_instance()
     
     def initialize_session(self):
         """Inicializa la sesión con valores por defecto"""
@@ -291,10 +270,8 @@ class ConversationService:
     
     def get_conversation_response(self, user_input: str) -> str:
         """Obtiene una respuesta del sistema conversacional usando Groq API"""
-        # Detectar crisis primero
-        crisis_keywords = ["suicidio", "matarme", "morir", "acabar con todo", "no quiero vivir", "desesperado"]
-        if any(keyword in user_input.lower() for keyword in crisis_keywords):
-            return "⚠️ **Crisis detectada**\n\nVeo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato.\n\n📞 **Líneas de ayuda inmediata:**\n• Línea de crisis: 911\n• Tu psicólogo de confianza\n• Servicios de emergencia local\n\nNo estás solo/a, busca ayuda profesional ahora."
+        if detectar_crisis(user_input):
+            return CRISIS_RESPONSE
 
         sintoma = session.get("sintoma_actual")
 
@@ -370,19 +347,47 @@ class ConversationService:
             logger.error(f"Error al agendar cita: {e}")
             return False, str(e)
     
+    def reset_session(self) -> None:
+        """
+        Guarda la conversación activa en DB y reinicia la sesión a estado inicial.
+        Llama a esto antes de session.clear() para no perder el historial.
+        """
+        from models import db as _db
+        from models import Conversation as ConvModel, Patient
+
+        conv_data = session.get("conversacion_data", {})
+        interacciones = conv_data.get("interacciones", [])
+        telefono = session.get("telefono_cita")
+
+        if interacciones:
+            try:
+                patient = Patient.query.filter_by(phone=telefono).first() if telefono else None
+                symptoms = list({i.get("sintoma") for i in interacciones if i.get("sintoma")})
+                conv = ConvModel(
+                    patient_id=patient.id if patient else None,
+                    session_id=session.get("_id", ""),
+                    ended_at=datetime.utcnow(),
+                )
+                conv.messages = interacciones
+                conv.detected_symptoms = symptoms
+                _db.session.add(conv)
+                _db.session.commit()
+            except Exception as e:
+                logger.warning(f"No se pudo guardar conversación en DB al resetear: {e}")
+
+        session.clear()
+        self.initialize_session()
+
+    def cancel_appointment_flow(self) -> None:
+        """Cancela el proceso de agendamiento y vuelve al estado de profundización."""
+        session["estado"] = "profundizacion"
+        self.add_bot_interaction(
+            "Entendido, he cancelado el proceso de agendamiento. ¿Hay algo más en lo que pueda ayudarte?",
+            session.get("sintoma_actual"),
+        )
+
     def get_template_data(self) -> Dict[str, Any]:
         """Obtiene todos los datos necesarios para renderizar la plantilla"""
-        # Sintomas disponibles (deben coincidir con los de app.py)
-        sintomas_disponibles = [
-            "Ansiedad", "Tristeza", "Estrés", "Soledad", "Miedo", "Culpa", "Inseguridad",
-            "Enojo", "Agotamiento emocional", "Falta de motivación", "Problemas de sueño",
-            "Dolor corporal", "Preocupación excesiva", "Cambios de humor", "Apatía",
-            "Sensación de vacío", "Pensamientos negativos", "Llanto frecuente",
-            "Dificultad para concentrarse", "Desesperanza", "Tensión muscular",
-            "Taquicardia", "Dificultad para respirar", "Problemas de alimentación",
-            "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
-        ]
-        
         estado_actual = session.get("estado", "inicio")
         
         # Obtener historial de conversación
@@ -399,7 +404,7 @@ class ConversationService:
         
         return {
             "estado": estado_actual,
-            "sintomas": sintomas_disponibles,
+            "sintomas": SINTOMAS_DISPONIBLES,
             "conversacion": conversacion_obj,  # Objeto con atributo historial
             "sintoma_actual": session.get("sintoma_actual"),
             "fechas_validas": session.get("fechas_validas", {})

@@ -1,38 +1,24 @@
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify, send_from_directory, make_response
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, make_response
 from datetime import datetime, timedelta
 import os
-import smtplib
 import json
 import re
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
-from functools import lru_cache
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from dotenv import load_dotenv
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import random
-import requests
-from environs import Env
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 from flask_login import LoginManager
-from markupsafe import escape
 import threading
 import time
-from groq import Groq
 import html
-from typing import Tuple, Optional, List, Dict, Any
 from dateutil import parser
-import resend
 
-# Importar nuevos servicios con arquitectura mejorada
-from services.ai_service import AIServiceFactory, AIServiceStrategy
 from services.validation_service import ValidationService
+from constants import SINTOMAS_DISPONIBLES
 from services.conversation_service import ConversationService
 from services.appointment_service import (
     validar_telefono,
@@ -57,7 +43,9 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 from models import db, User
+from flask_migrate import Migrate
 db.init_app(app)
+migrate = Migrate(app, db)
 
 # ==================== FLASK-LOGIN ====================
 login_manager = LoginManager()
@@ -73,12 +61,20 @@ def load_user(user_id):
 from admin import admin_bp
 app.register_blueprint(admin_bp)
 
-# Crear tablas al iniciar (funciona con gunicorn y waitress)
-with app.app_context():
-    try:
-        db.create_all()
-    except Exception:
-        pass  # Las tablas ya existen o DB no disponible aún
+# Blueprint de debug: solo disponible fuera de producción
+if os.environ.get('FLASK_ENV') != 'production':
+    from debug_routes import debug_bp
+    app.register_blueprint(debug_bp)
+    app.logger.info("Blueprint de debug registrado (solo entorno de desarrollo)")
+
+# En desarrollo sin migraciones aplicadas, crear tablas automáticamente.
+# En producción se usa: flask db upgrade
+if os.environ.get('FLASK_ENV') != 'production':
+    with app.app_context():
+        try:
+            db.create_all()
+        except Exception:
+            pass
 
 # Configuración desde variables de entorno
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "clave_por_defecto_para_desarrollo")
@@ -146,958 +142,9 @@ for directory in ["conversaciones", "datos", "logs", "services"]:
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-horarios_cache = {}
-cache_lock = threading.Lock()
+# ==================== SERVICIOS ====================
 
-# ==================== INICIALIZACIÓN DE SERVICIOS MEJORADOS ====================
-# Servicios con arquitectura mejorada usando patrones de diseño
-
-# 1. Servicio de validación (Template Method Pattern)
 validation_service = ValidationService()
-
-# 2. Servicio de IA (Strategy Pattern + Factory Pattern + Decorator Pattern)
-ai_service = None
-try:
-    # Verificar si GROQ_API_KEY está configurada antes de intentar crear el servicio
-    groq_api_key = os.getenv('GROQ_API_KEY')
-    if not groq_api_key:
-        app.logger.warning("⚠️ GROQ_API_KEY no configurada. Usando servicio de fallback.")
-        ai_service = AIServiceFactory.create_service("fallback")
-        app.logger.info("✅ Servicio de IA inicializado con Fallback Strategy Pattern")
-    else:
-        app.logger.info(f"🔑 GROQ_API_KEY encontrada (longitud: {len(groq_api_key)} caracteres)")
-        ai_service = AIServiceFactory.create_service("groq")
-        app.logger.info("✅ Servicio de IA inicializado con Groq Strategy Pattern")
-except Exception as e:
-    app.logger.error(f"❌ Error inicializando servicio de IA: {e}")
-    ai_service = AIServiceFactory.create_service("fallback")
-    app.logger.info("✅ Usando servicio de IA de fallback por error")
-
-# ==================== CACHÉ PARA RESPUESTAS DE IA ====================
-# Caché LRU para respuestas de Groq para reducir costos y latencia
-respuestas_ia_cache = {}
-respuestas_ia_cache_lock = threading.Lock()
-CACHE_MAX_SIZE = 100  # Máximo 100 respuestas en caché
-CACHE_TTL = 3600  # 1 hora en segundos
-
-def limpiar_cache_respuestas():
-    """Limpia respuestas antiguas del caché de IA"""
-    try:
-        while True:
-            time.sleep(300)  # Cada 5 minutos
-            with respuestas_ia_cache_lock:
-                now = time.time()
-                keys_to_delete = []
-                for key, (timestamp, _) in respuestas_ia_cache.items():
-                    if now - timestamp > CACHE_TTL:
-                        keys_to_delete.append(key)
-                
-                for key in keys_to_delete:
-                    del respuestas_ia_cache[key]
-                
-                if keys_to_delete:
-                    app.logger.info(f"Cache de respuestas IA limpiado. Eliminadas {len(keys_to_delete)} entradas.")
-    except Exception as e:
-        app.logger.error(f"Error limpiando cache de respuestas IA: {e}")
-
-def obtener_cache_key(texto: str, sintoma: str = None) -> str:
-    """Genera una clave única para el caché basada en texto y síntoma"""
-    import hashlib
-    contenido = f"{texto[:200]}_{sintoma}"  # Limitar longitud para eficiencia
-    return hashlib.md5(contenido.encode('utf-8')).hexdigest()
-
-def obtener_respuesta_cacheada(texto: str, sintoma: str = None) -> Optional[str]:
-    """Obtiene respuesta del caché si existe y es válida"""
-    cache_key = obtener_cache_key(texto, sintoma)
-    
-    with respuestas_ia_cache_lock:
-        if cache_key in respuestas_ia_cache:
-            timestamp, respuesta = respuestas_ia_cache[cache_key]
-            if time.time() - timestamp < CACHE_TTL:
-                app.logger.info(f"✅ Respuesta obtenida del caché para clave: {cache_key[:8]}...")
-                return respuesta
-            else:
-                # Eliminar entrada expirada
-                del respuestas_ia_cache[cache_key]
-    
-    return None
-
-def guardar_respuesta_cache(texto: str, sintoma: str = None, respuesta: str = ""):
-    """Guarda una respuesta en el caché"""
-    if not respuesta or len(respuesta) < 10:
-        return
-    
-    cache_key = obtener_cache_key(texto, sintoma)
-    
-    with respuestas_ia_cache_lock:
-        # Limitar tamaño del caché
-        if len(respuestas_ia_cache) >= CACHE_MAX_SIZE:
-            # Eliminar la entrada más antigua
-            oldest_key = min(respuestas_ia_cache.keys(), 
-                           key=lambda k: respuestas_ia_cache[k][0])
-            del respuestas_ia_cache[oldest_key]
-        
-        respuestas_ia_cache[cache_key] = (time.time(), respuesta)
-        app.logger.info(f"💾 Respuesta guardada en caché. Tamaño actual: {len(respuestas_ia_cache)}")
-
-# ==================== FUNCIONES DE VALIDACIÓN DE HORARIOS ====================
-
-# Nota: validar_horario_cita ahora importada desde services.appointment_service
-
-def obtener_horarios_disponibles_estrictos(fecha_str: str) -> List[Dict[str, Any]]:
-    """
-    Obtener horarios disponibles con validaciones estrictas usando el servicio de validación
-    """
-    return validation_service.get_available_time_slots(fecha_str)
-
-class SistemaAprendizaje:
-    def __init__(self):
-        self.respuestas_efectivas = {}  
-        self.patrones_conversacion = {}  
-        self.archivo_aprendizaje = "datos/aprendizaje.json"
-        self.lock = threading.Lock()  
-        self.cargar_aprendizaje()
-    
-    def cargar_aprendizaje(self):
-        try:
-            with self.lock:
-                if os.path.exists(self.archivo_aprendizaje):
-                    with open(self.archivo_aprendizaje, 'r', encoding='utf-8') as f:
-                        datos = json.load(f)
-                        self.respuestas_efectivas = datos.get('respuestas_efectivas', {})
-                        self.patrones_conversacion = datos.get('patrones_conversacion', {})
-        except Exception as e:
-            app.logger.error(f"Error cargando aprendizaje: {e}")
-    
-    def guardar_aprendizaje(self):
-        try:
-            with self.lock:
-                os.makedirs(os.path.dirname(self.archivo_aprendizaje), exist_ok=True)
-                with open(self.archivo_aprendizaje, 'w', encoding='utf-8') as f:
-                    json.dump({
-                        'respuestas_efectivas': self.respuestas_efectivas,
-                        'patrones_conversacion': self.patrones_conversacion
-                    }, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            app.logger.error(f"Error guardando aprendizaje: {e}")
-    
-    def evaluar_respuesta(self, sintoma, respuesta_usuario, respuesta_bot, engagement):
-        if not isinstance(sintoma, str) or not sintoma.strip():
-            return
-            
-        if not isinstance(respuesta_bot, str) or not respuesta_bot.strip():
-            return
-            
-        efectividad = min(10, max(1, engagement))
-        
-        if sintoma not in self.respuestas_efectivas:
-            self.respuestas_efectivas[sintoma] = {}
-        
-        if respuesta_bot not in self.respuestas_efectivas[sintoma]:
-            self.respuestas_efectivas[sintoma][respuesta_bot] = {
-                'efectividad_total': 0,
-                'veces_usada': 0,
-                'ultimo_uso': datetime.now().isoformat()
-            }
-        
-        self.respuestas_efectivas[sintoma][respuesta_bot]['efectividad_total'] += efectividad
-        self.respuestas_efectivas[sintoma][respuesta_bot]['veces_usada'] += 1
-        self.respuestas_efectivas[sintoma][respuesta_bot]['ultimo_uso'] = datetime.now().isoformat()
-        
-        self.guardar_aprendizaje()
-    
-    def obtener_mejor_respuesta(self, sintoma, contexto):
-        if sintoma in self.respuestas_efectivas and self.respuestas_efectivas[sintoma]:
-            respuestas_ordenadas = sorted(
-                self.respuestas_efectivas[sintoma].items(),
-                key=lambda x: x[1]['efectividad_total'] / x[1]['veces_usada'] if x[1]['veces_usada'] > 0 else 0,
-                reverse=True
-            )
-            
-            for respuesta, stats in respuestas_ordenadas[:3]: 
-                ultimo_uso = datetime.fromisoformat(stats['ultimo_uso'])
-                if (datetime.now() - ultimo_uso).total_seconds() > 3600:
-                    return respuesta
-        
-        return None  
-
-def seleccionar_modelo_groq(longitud_texto: int, complejidad_tema: str) -> str:
-    """
-    Selecciona el modelo de Groq más apropiado según la situación
-    
-    Args:
-        longitud_texto: Longitud del texto del usuario
-        complejidad_tema: Complejidad del tema ('crisis', 'complejo', 'normal')
-    
-    Returns:
-        str: Nombre del modelo a usar
-    """
-    # 1. openai/gpt-oss-120b - Para situaciones complejas y respuestas de alta calidad
-    if complejidad_tema == 'crisis' or longitud_texto > 200:
-        return "openai/gpt-oss-120b"
-    
-    # 2. llama-3.1-70b-versatile - Para la mayoría de casos, equilibrado
-    elif complejidad_tema == 'complejo' or longitud_texto > 100:
-        return "llama-3.1-70b-versatile"
-    
-    # 3. openai/gpt-oss-20b - Solo para respuestas rápidas y simples
-    else:
-        return "openai/gpt-oss-20b"
-
-
-def generar_respuesta_groq(texto: str, sintoma: str = None) -> str:
-    """
-    Función mejorada para generar respuestas usando el servicio de IA con arquitectura mejorada
-    (Strategy Pattern + Factory Pattern + Decorator Pattern)
-    
-    Args:
-        texto: Texto del usuario
-        sintoma: Síntoma principal (opcional)
-    
-    Returns:
-        str: Respuesta generada y formateada
-    """
-    # 1. Verificar si la respuesta está en caché
-    respuesta_cacheada = obtener_respuesta_cacheada(texto, sintoma)
-    if respuesta_cacheada:
-        app.logger.info(f"✅ Respuesta obtenida del caché (texto: {len(texto)} chars, síntoma: {sintoma})")
-        return respuesta_cacheada
-    
-    try:
-        # Usar el servicio de IA con arquitectura mejorada
-        if not ai_service:
-            app.logger.error("❌ Servicio de IA no inicializado")
-            return "Lo siento, no puedo generar una respuesta en este momento."
-        
-        # Determinar complejidad del tema
-        complejidad = "normal"
-        if detectar_crisis(texto):
-            complejidad = "crisis"
-        elif len(texto) > 150 or (sintoma and sintoma in ["Ansiedad", "Depresión", "Estrés", "Problemas familiares", "Problemas de pareja"]):
-            complejidad = "complejo"
-        
-        # Generar respuesta usando el servicio de IA (YA INCLUYE FORMATEO INTERNO)
-        respuesta_formateada = ai_service.generate_response(texto, sintoma, complejidad)
-        
-        # Log del uso del servicio
-        app.logger.info(f"✅ Respuesta generada con servicio de IA - Longitud: {len(respuesta_formateada)} caracteres")
-        
-        # 2. Guardar respuesta en caché para futuras consultas similares
-        guardar_respuesta_cache(texto, sintoma, respuesta_formateada)
-        
-        return respuesta_formateada
-
-    except Exception as e:
-        app.logger.error(f"Error al generar respuesta con servicio de IA: {e}")
-        
-        # Fallback a respuestas predefinidas en caso de error
-        if detectar_crisis(texto):
-            return "⚠️ **Crisis detectada**\n\nVeo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato.\n\n📞 **Líneas de ayuda inmediata:**\n• Línea de crisis: 911\n• Tu psicólogo de confianza\n• Servicios de emergencia local\n\nNo estás solo/a, busca ayuda profesional ahora."
-        
-        return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
-
-def generar_respuesta_llm(prompt: str, sintoma: str = None) -> str:
-    """
-    Función actualizada para usar el servicio de IA con arquitectura mejorada
-    
-    Args:
-        prompt: Prompt para el modelo
-        sintoma: Síntoma principal (opcional)
-    
-    Returns:
-        str: Respuesta generada
-    """
-    try:
-        # Usar el servicio de IA directamente para mejor rendimiento
-        if not ai_service:
-            app.logger.error("❌ Servicio de IA no inicializado")
-            return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
-        
-        # Determinar complejidad del tema
-        complejidad = "normal"
-        if detectar_crisis(prompt):
-            complejidad = "crisis"
-        elif len(prompt) > 150 or (sintoma and sintoma in ["Ansiedad", "Depresión", "Estrés", "Problemas familiares", "Problemas de pareja"]):
-            complejidad = "complejo"
-        
-        # Generar respuesta usando el servicio de IA (YA INCLUYE FORMATEO INTERNO)
-        respuesta_formateada = ai_service.generate_response(prompt, sintoma, complejidad)
-        
-        return respuesta_formateada
-    
-    except Exception as e:
-        app.logger.error(f"Error al generar respuesta con LLM: {e}")
-        return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
-
-def sanitizar_input(texto):
-    if not texto:
-        return ""
-    texto = html.escape(texto)
-    texto = re.sub(r'[<>{}[\]();]', '', texto)
-    return texto[:500] if len(texto) > 500 else texto
-
-# Nota: validar_telefono ahora importada desde services.appointment_service
-
-def calcular_duracion_dias(fecha_str):
-    if not fecha_str:
-        return 0
-    try:
-        fecha_inicio = datetime.strptime(fecha_str, "%Y-%m-%d")
-        return (datetime.now() - fecha_inicio).days
-    except ValueError:
-        return 0
-
-def detectar_crisis(texto):
-    patrones_crisis = [
-        r'suicidio', r'autolesión', r'autoflagelo', r'matarme', 
-        r'no\s+quiero\s+vivir', r'acabar\s+con\s+todo', 
-        r'no\s+vale\s+la\s+pena', r'sin\s+esperanza', 
-        r'quiero\s+morir', r'terminar\s+con\s+todo',
-        r'me\s+quiero\s+morir', r'acabar\s+con\s+mi\s+vida',
-        r'no\s+puedo\s+más', r'estoy\s+harto(a)?', r'sin\s+sentido',
-        r'despedirme', r'adios', r'no\s+aguanto', r'cansado(a)?\s+de\s+vivir'
-    ]
-    
-    texto = texto.lower()
-    for patron in patrones_crisis:
-        if re.search(patron, texto):
-            return True
-    return False
-
-sintomas_disponibles = [
-    "Ansiedad", "Tristeza", "Estrés", "Soledad", "Miedo", "Culpa", "Inseguridad",
-    "Enojo", "Agotamiento emocional", "Falta de motivación", "Problemas de sueño",
-    "Dolor corporal", "Preocupación excesiva", "Cambios de humor", "Apatía",
-    "Sensación de vacío", "Pensamientos negativos", "Llanto frecuente",
-    "Dificultad para concentrarse", "Desesperanza", "Tensión muscular",
-    "Taquicardia", "Dificultad para respirar", "Problemas de alimentación",
-    "Pensamientos intrusivos", "Problemas familiares", "Problemas de pareja"
-]
-
-respuestas_por_sintoma = {
-    "Ansiedad": [
-        "La ansiedad puede ser abrumadora. ¿Qué situaciones la desencadenan?",
-        "Cuando sientes ansiedad, ¿qué técnicas has probado para calmarte?",
-        "¿Notas que la ansiedad afecta tu cuerpo (ej. taquicardia, sudoración)?",
-        "Vamos a respirar juntos: inhala por 4 segundos, exhala por 6. ¿Te ayuda?",
-        "¿Hay algo que solía relajarte y ahora ya no funciona?",
-        "¿Sientes síntomas como opresión en el pecho o dificultad para respirar?",
-        "Tu cuerpo también habla cuando tu mente está saturada, escúchalo sin juzgar.",
-        "A veces, lo que más ayuda es hablar sin miedo a ser juzgado.",
-        "No necesitas resolver todo hoy. ¿Qué necesitas en este momento?",
-        "¿Qué pensamientos suelen venir justo antes de que inicie la ansiedad?"
-    ],
-    "Tristeza": [
-        "Sentir tristeza no significa debilidad. Es una señal de que algo importa.",
-        "¿Qué eventos recientes han influido en tu estado de ánimo?",
-        "Permítete sentir. Reprimir emociones no las hace desaparecer.",
-        "¿Te has dado permiso para descansar o simplemente estar contigo?",
-        "¿Hay música, recuerdos o espacios que antes te aliviaban?",
-        "Es posible que tu cuerpo también necesite descanso emocional.",
-        "¿Cómo expresarías tu tristeza si fuera una historia o una imagen?",
-        "Estás haciendo lo mejor que puedes. Validar eso ya es un paso enorme.",
-        "¿Has probado escribir lo que sientes, sin filtros ni juicios?",
-        "Estoy contigo en esto. ¿Qué necesitarías hoy para sentirte un poco mejor?"
-    ],
-    "Estrés": [
-        "¿Notas si el estrés aparece más en ciertos momentos del día?",
-        "A veces, solo detenerse y respirar ya es una forma de cuidarse.",
-        "¿Te estás exigiendo demasiado últimamente?",
-        "El estrés también habla de tus límites. ¿Puedes identificar alguno que fue cruzado?",
-        "Probar técnicas breves como estiramientos, música relajante o caminar puede ayudar.",
-        "¿Te has permitido no ser productivo un día sin sentir culpa?",
-        "Es posible organizar el caos en partes pequeñas. ¿Te ayudo a descomponerlo?",
-        "¿Tu cuerpo ha mostrado señales físicas de ese estrés (dolores, rigidez)?",
-        "Darte un espacio para ti es un acto necesario, no egoísta.",
-        "Tomarte pausas no es perder tiempo; es cuidar tu salud emocional."
-    ],
-    "Soledad": [
-        "La soledad puede sentirse como un vacío difícil de explicar. Gracias por compartirlo.",
-        "¿Qué tipo de compañía sientes que necesitas: emocional, física, espiritual?",
-        "¿Hay alguna actividad que te conecte contigo y te haga sentir menos solo?",
-        "¿Has considerado escribirle a alguien con quien no hablas hace tiempo?",
-        "Conectar con otros lleva tiempo, and está bien tomarse ese proceso con calma.",
-        "¿Te gustaría imaginar cómo sería un vínculo que te dé contención?",
-        "A veces estar acompañado por alguien no significa dejar de sentir soledad. ¿Lo has sentido?",
-        "¿Qué podrías hacer hoy que te haga sentir parte de algo, aunque sea pequeño?",
-        "¿Hay alguna comunidad o espacio que quisieras explorar?",
-        "Recuerda que mereces sentirte valorado y escuchado."
-    ],
-    "Miedo": [
-        "El miedo es una emoción natural que nos protege, pero no debe paralizarnos.",
-        "¿Puedes identificar qué te provoca miedo exactamente?",
-        "Hablar de tus miedos puede ayudarte to entenderlos mejor.",
-        "¿Cómo reaccionas cuando el miedo aparece?",
-        "Enfrentar poco a poco esos miedos puede disminuir su poder.",
-        "¿Has probado técnicas de relajación cuando sientes miedo?",
-        "Compartir lo que sientes puede aliviar la carga emocional.",
-        "¿Sientes que el miedo limita tu vida o tus decisiones?",
-        "La valentía no es ausencia de miedo, sino actuar a pesar de él.",
-        "Si el miedo persiste, buscar ayuda profesional es una buena opción."
-    ],
-    "Culpa": [
-        "Sentir culpa puede ser agotador. ¿Qué parte de ti necesita ser perdonada?",
-        "¿Eres igual de duro contigo que lo serías con alguien que amas?",
-        "¿La culpa viene de una expectativa tuya or de los demás?",
-        "Podemos aprender de lo que pasó sin cargarlo como un castigo eterno.",
-        "Todos cometemos errores. La clave está en lo que haces con eso ahora.",
-        "¿Hay algo que puedas hacer para reparar or aliviar esa carga?",
-        "A veces la culpa no es real, sino impuesta. ¿De quién es esa voz interna?",
-        "Eres humano. Equivocarte no te hace menos valioso.",
-        "¿Qué le dirías a un amigo if estuviera en tu lugar?",
-        "Reconocer lo que sientes es el primer paso hacia la liberación emocional."
-    ],
-    "Inseguridad": [
-        "La inseguridad puede afectar muchas áreas de tu vida.",
-        "¿En qué situaciones te sientes más inseguro?",
-        "Hablar de tus inseguridades es un buen paso para superarlas.",
-        "¿Qué cualidades positivas reconoces en ti mismo?",
-        "Reconocer tus fortalezas puede ayudarte a aumentar tu confianza.",
-        "¿Has probado ejercicios para mejorar tu autoestima?",
-        "¿Cómo afecta la inseguridad tus relaciones con otros?",
-        "Es normal sentir inseguridad, pero no define quién eres.",
-        "¿Tienes alguien de confianza para hablar sobre esto?",
-        "Buscar apoyo puede ayudarte a fortalecer tu confianza.",
-    ],
-    "Enojo": [
-        "El enojo es una emoción válida, es bueno expresarlo.",
-        "¿Qué situaciones suelen generar tu enojo?",
-        "¿Cómo sueles manejar tu enojo cuando aparece?",
-        "Hablar sobre lo que te molesta puede ayudarte a calmarte.",
-        "¿Has probado técnicas para controlar la ira o relajarte?",
-        "Reconcer tu enojo es el primer paso para gestionarlo.",
-        "¿Cómo afecta el enojo tus relaciones personales?",
-        "¿Tienes alguien con quien puedas hablar cuando estás enojado?",
-        "Expresar el enojo de forma saludable es importante.",
-        "¿Qué cosas te ayudan a calmarte cuando estás molesto?",
-        "¿Has notado si el enojo se relaciona con otras emociones?",
-        "Buscar apoyo puede facilitar manejar mejor el enojo.",
-        "¿Quieres contarme alguna experiencia reciente que te haya enojado?",
-        "Practicar la empatía puede ayudarte a manejar el enojo.",
-        "Si el enojo es muy frecuente, considera hablar con un especialista."
-    ],
-    "Agotamiento emocional": [
-        "El agotamiento emocional puede afectar tu energía y ánimo.",
-        "¿Qué cosas te están causando más cansancio emocional?",
-        "Es importante que te des tiempo para descansar y recargar.",
-        "Hablar de cómo te sientes puede aliviar parte del agotamiento.",
-        "¿Has intentado actividades que te ayuden a relajarte?",
-        "Reconocer el agotamiento es clave para cuidarte mejor.",
-        "¿Sientes que el agotamiento afecta tu vida diaria?",
-        "¿Tienes apoyo para compartir lo que estás viviendo?",
-        "El autocuidado es fundamental para superar el agotamiento.",
-        "¿Qué cosas te gustaría cambiar para sentirte con más energía?",
-        "Es válido pedir ayuda cuando te sientes muy cansado/a.",
-        "¿Quieres contarme cómo has estado manejando este cansancio?",
-        "Tomar pausas durante el día puede ayudarte a recuperar energías.",
-        "Recuerda que cuidar de ti es una prioridad.",
-        "If el agotamiento persiste, considera consultar con un profesional."
-    ],
-    "Falta de motivación": [
-        "La falta de motivación puede ser difícil, pero es temporal.",
-        "¿Qué cosas te gustaría lograr si tuvieras más energía?",
-        "Hablar de tus sentimientos puede ayudarte a encontrar motivación.",
-        "¿Has identificado qué te quita las ganas de hacer cosas?",
-        "Pequeños pasos pueden ayudarte a recuperar la motivación.",
-        "¿Tienes alguien que te apoye en tus metas?",
-        "Reconocer la falta de motivación es el primer paso para cambiar.",
-        "¿Qué actividades solías disfrutar y ahora te cuestan más?",
-        "Es normal tener altibajos en la motivación, sé paciente.",
-        "¿Quieres contarme cómo te sientes al respecto?",
-        "Buscar apoyo puede facilitar que recuperes el interés.",
-        "¿Hay obstáculos que te impiden avanzar?",
-        "Celebrar pequeños logros puede aumentar tu motivación.",
-        "¿Has probado cambiar tu rutina para sentirte mejor?",
-        "Si la falta de motivación es persistente, considera ayuda profesional."
-    ],
-    "Problemas de sueño": [
-        "Dormir bien es fundamental para tu bienestar general.",
-        "¿Qué dificultades tienes para conciliar o mantener el sueño?",
-        "Crear una rutina antes de dormir puede ayudarte a descansar mejor.",
-        "Evitar pantallas antes de dormir puede mejorar la calidad del sueño.",
-        "¿Has probado técnicas de relajación para dormir mejor?",
-        "Reconocer el problema es importante para buscar soluciones.",
-        "¿Sientes que el sueño insuficiente afecta tu ánimo o concentración?",
-        "¿Tienes hábitos que podrían estar interfiriendo con tu descanso?",
-        "Hablar de tus preocupaciones puede facilitar dormir mejor.",
-        "¿Quieres contarme cómo es tu rutina de sueño actual?",
-        "El ejercicio regular puede ayudar a mejorar el sueño.",
-        "Evitar cafeína o comidas pesadas antes de dormir es recomendable.",
-        "¿Has tenido episodios de insomnio prolongados?",
-        "Si los problemas de sueño persisten, un especialista puede ayudar.",
-        "Cuidar el ambiente donde duermes es clave para un buen descanso."
-    ],
-    "Dolor corporal": [
-        "El dolor puede afectar mucho tu calidad de vida, es importante escucharlo.",
-        "¿Dónde sientes más el dolor y cómo describirías su intensidad?",
-        "Hablar sobre el dolor puede ayudarte a entenderlo mejor.",
-        "¿Has probado técnicas de relajación or estiramientos suaves?",
-        "El estrés puede influir en la percepción del dolor.",
-        "¿Has consultado a un profesional sobre este dolor?",
-        "Cuidar tu postura puede ayudar a disminuir molestias físicas.",
-        "¿El dolor afecta tus actividades diarias?",
-        "¿Sientes que hay momentos del día en que el dolor empeora?",
-        "Es válido buscar ayuda médica y psicológica para el dolor crónico.",
-        "¿Quieres contarme cómo te afecta emocionalmente el dolor?",
-        "La conexión cuerpo-mente es importante para el bienestar general.",
-        "¿Has probado terapias complementarias, como masajes o yoga?",
-        "Escuchar a tu body es clave para cuidarte mejor.",
-        "Si el dolor es constante, no dudes en buscar apoyo especializado."
-    ],
-    "Preocupación excesiva": [
-        "Preocuparse es normal, pero en exceso puede afectar tu vida.",
-        "¿Qué pensamientos recurrentes te generas más preocupación?",
-        "Hablar de tus preocupaciones puede aliviar su peso.",
-        "¿Has probado técnicas para distraer tu mente or relajarte?",
-        "Reconcer la preocupación es el primer paso para manejarla.",
-        "¿Sientes que la preocupación afecta tu sueño o ánimo?",
-        "¿Tienes alguien con quien puedas compartir lo que te preocupa?",
-        "Aprender a diferenciar lo que puedes controlar ayuda a reducir el estrés.",
-        "¿Quieres contarme qué te gustaría cambiar respecto a tus preocupaciones?",
-        "Buscar apoyo puede facilitar encontrar soluciones efectivas.",
-        "¿Has intentado escribir tus pensamientos para entenderlos mejor?",
-        "La práctica de mindfulness puede ayudar a reducir la preocupación.",
-        "¿Sientes que la preocupación interfiere en tus actividades diarias?",
-        "Es válido pedir ayuda si las preocupaciones son muy intensas.",
-        "Recuerda que tu bienestar es importante and hay caminos para mejorar."
-    ],
-    "Cambios de humor": [
-        "Los cambios de humor pueden ser difíciles de manejar.",
-        "¿Puedes identificar qué situaciones disparan esos cambios?",
-        "Hablar de tus emociones puede ayudarte a entenderlas mejor.",
-        "¿Has notado patrones en tus cambios de humor?",
-        "Reconocer tus sentimientos es un paso para gestionarlos.",
-        "¿Tienes alguien con quien puedas compartir cómo te sientes?",
-        "¿Cómo afectan esos cambios tu vida diaria y relaciones?",
-        "Es importante cuidar de tu salud emocional constantemente.",
-        "¿Quieres contarme cómo te sientes en los momentos más estables?",
-        "Buscar apoyo puede facilitar manejar los cambios emocionales.",       
-    ],
-    "Apatía": [
-        "Sentir apatía puede hacer que todo parezca sin sentido.",
-        "¿Quieres contarme qué cosas te generan menos interés ahora?",
-        "Hablar de lo que sientes puede ayudarte a reconectar contigo.",
-        "¿Has notado si la apatía está relacionada con otras emociones?",
-        "Reconocerla es importante para buscar formas de superarla.",
-        "¿Tienes alguien con quien puedas compartir tus sentimientos?",
-        "Pequeños cambios en tu rutina pueden ayudar a mejorar.",
-        "¿Qué cosas te gustaría recuperar or volver a disfrutar?",
-        "Es normal tener momentos bajos, sé paciente contigo mismo.",
-        "¿Quieres contarme cómo te sientes en general últimamente?",
-        "Buscar apoyo puede facilitar que recuperes energía e interés.",
-        "¿Has probado actividades nuevas o diferentes para motivarte?",
-        "Recuerda que mereces cuidado y atención a tus emociones.",
-        "Si la apatía persiste, considera hablar con un profesional.",
-        "Tu bienestar es importante and hay caminos para mejorar."
-    ],
-    "Sensación de vacío": [
-        "Sentir vacío puede ser muy desconcertante, gracias por compartirlo.",
-        "¿Quieres contarme cuándo empezaste a sentir ese vacío?",
-        "Hablar sobre ello puede ayudarte a entender mejor tus emociones.",
-        "¿Hay momentos en que ese vacío se hace más presente?",
-        "Reconocer este sentimiento es un primer paso para manejarlo.",
-        "¿Tienes alguien con quien puedas compartir cómo te sientes?",
-        "A veces, el vacío puede indicar que necesitas cambios en tu vida.",
-        "¿Qué cosas te hacían sentir pleno o feliz antes?",
-        "Es válido buscar ayuda para reconectar contigo mismo.",
-        "¿Quieres contarme cómo es tu día a día con esta sensación?",
-        "Explorar tus emociones puede ayudarte a llenar ese vacío.",
-        "Recuerda que mereces sentirte bien y en paz interiormente.",
-        "¿Has probado actividades que te conecten con tus intereses?",
-        "Si este sentimiento persiste, un especialista puede apoyarte.",
-        "Estoy aquí para escucharte y acompañarte en este proceso."
-    ],
-    "Pensamientos negativos": [
-        "Los pensamientos negativos pueden ser muy pesados.",
-        "¿Puedes contarme qué tipo de pensamientos recurrentes tienes?",
-        "Hablar sobre ellos puede ayudarte a liberarte un poco.",
-        "Reconcer estos pensamientos es el primer paso para manejarlos.",
-        "¿Sientes que afectan cómo te ves a ti mismo o a los demás?",
-        "¿Has probado técnicas para reemplazarlos por otros más positivos?",
-        "Es normal tener pensamientos negativos, pero no define quién eres.",
-        "¿Tienes alguien con quien puedas compartir tus inquietudes?",
-        "Buscar apoyo puede facilitar encontrar formas de manejarlos.",
-        "¿Quieres contarme cuándo suelen aparecer esos pensamientos?",
-        "Practicar la autocompasión es importante para tu bienestar.",
-        "¿Cómo afectan esos pensamientos tu vida diaria?",
-        "Si los pensamientos son muy intensos, considera ayuda profesional.",
-        "Recuerda que mereces paz mental y emocional.",
-        "Estoy aquí para escucharte y apoyarte en este camino."
-    ],
-    "Llanto frecuente": [
-        "Llorar es una forma natural de liberar emociones contenidas.",
-        "¿Sientes que lloras sin saber exactamente por qué?",
-        "No estás solo/a. Muchas personas pasan por esto más seguido de lo que imaginas.",
-        "¿Qué suele pasar antes de que sientas ganas de llorar?",
-        "Tu llanto también es una voz que pide ser escuchada.",
-        "¿Hay algo que estés conteniendo desde hace tiempo?",
-        "¿Después de llorar sientes alivio o más angustia?",
-        "No te juzgues por expresar tu dolor. Es válido y humano.",
-        "¿Has tenido un espacio seguro donde simplemente puedas llorar y ser escuchado?",
-        "Tus lágrimas tienen un motivo. ¿Te gustaría explorar cuál es?"
-    ],
-    "Dificultad para concentrarse": [
-        "La concentración puede verse afectada por muchos factores.",
-        "¿Quieres contarme cuándo notas más esta dificultad?",
-        "Hablar de lo que te distrae puede ayudarte a mejorar tu foco.",
-        "Reconcer el problema es importante para buscar soluciones.",
-        "¿Sientes que tu mente está muy dispersa o cansada?",
-        "¿Has probado técnicas como pausas cortas or ambientes tranquilos?",
-        "El estrés y la ansiedad pueden influir en la concentración.",
-        "¿Tienes alguien con quien puedas compartir cómo te sientes?",
-        "Buscar apoyo puede facilitar que mejores tu atención.",
-        "¿Quieres contarme cómo afecta esta dificultad tu día a día?",
-        "Practicar ejercicios mentales puede ayudarte a fortalecer el foco.",
-        "¿Has intentado organizar tus tareas para facilitar la concentración?",
-        "Si esta dificultad es persistente, considera ayuda profesional.",
-        "Recuerda que mereces sentirte capaz y enfocado.",
-        "Estoy aquí para escucharte y apoyarte en este proceso."
-    ],
-    "Desesperanza": [
-        "Sentir desesperanza es muy difícil, gracias por compartir.",
-        "¿Quieres contarme qué te hace sentir así últimamente?",
-        "Hablar sobre ello puede ayudarte a encontrar luz en la oscuridad.",
-        "Reconocer esos sentimientos es el primer paso para salir adelante.",
-        "¿Tienes alguien con quien puedas compartir lo que sientes?",
-        "Es válido pedir ayuda cuando sientes que la esperanza falta.",
-        "¿Qué cosas te han dado un poco de alivio en momentos difíciles?",
-        "Recuerda que mereces apoyo y cuidado en estos momentos.",
-        "¿Quieres contarme cómo te imaginas un futuro mejor?",
-        "Buscar ayuda profesional puede ser muy beneficioso ahora.",
-        "¿Has intentado actividades que te ayuden a sentir esperanza?",
-        "No estás solo/a, y hay caminos para sentirte mejor.",
-        "¿Quieres que te comparta recursos or estrategias para esto?",
-        "Estoy aquí para escucharte y acompañarte siempre.",
-        "La esperanza puede volver, paso a paso y con apoyo."
-    ],
-    "Tensión muscular": [
-        "La tensión muscular puede ser síntoma de estrés or ansiedad.",
-        "¿En qué partes de tu cuerpo sientes más tensión?",
-        "Probar estiramientos suaves puede ayudarte to aliviar la tensión.",
-        "¿Has intentado técnicas de relajación o respiración profunda?",
-        "Hablar de tu estado puede ayudarte a identificar causas.",
-        "¿Sientes que la tensión afecta tu movilidad or bienestar?",
-        "El descanso y una buena postura son importantes para el cuerpo.",
-        "¿Tienes alguien con quien puedas compartir cómo te sientes?",
-        "Buscar apoyo puede facilitar aliviar la tensión muscular.",
-        "¿Quieres contarme cuándo notas más esa tensión?",
-        "La conexión mente-cuerpo es clave para tu bienestar.",
-        "Considera actividades como yoga o masajes para relajarte.",
-        "If la tensión persiste, un profesional puede ayudarte.",
-        "Recuerda que cuidar de tu cuerpo es parte del autocuidado.",
-        "Estoy aquí para apoyarte y escucharte siempre."
-    ],
-    "Taquicardia": [
-        "La taquicardia puede ser alarmante, es bueno que hables de ello.",
-        "¿Cuándo has notado que se acelera tu corazón?",
-        "¿Sientes que la taquicardia está relacionada con el estrés o ansiedad?",
-        "Es importante que consultes con un médico para evaluar tu salud.",
-        "¿Has probado técnicas de respiración para calmarte?",
-        "Hablar de lo que sientes puede ayudarte a manejar la ansiedad.",
-        "¿Sientes otros síntomas junto con la taquicardia?",
-        "¿Tienes alguien con quien puedas compartir estas experiencias?",
-        "Buscar apoyo profesional es clave para cuidar tu salud.",
-        "¿Quieres contarme cómo te sientes cuando ocurre esto?",
-        "La información y la atención médica son fundamentales.",
-        "Recuerda que mereces cuidado y atención constante.",
-        "¿Has evitado situaciones que crees que la provocan?",
-        "If la taquicardia persiste, no dudes en buscar ayuda urgente.",
-        "Estoy aquí para escucharte y acompañarte."
-    ],
-    "Dificultad para respirar": [
-        "La dificultad para respirar puede ser muy angustiante.",
-        "¿Cuándo sueles sentir que te falta el aire?",
-        "Probar respiraciones lentas y profundas puede ayudar momentáneamente.",
-        "Es fundamental que consultes con un profesional de salud.",
-        "¿Sientes que la dificultad está relacionada con ansiedad or estrés?",
-        "Hablar de lo que experimentas puede ayudarte a manejarlo.",
-        "¿Tienes alguien con quien puedas compartir estas sensaciones?",
-        "Buscar ayuda médica es muy importante en estos casos.",
-        "¿Quieres contarme cómo te afecta esta dificultad en tu vida?",
-        "Recuerda que tu salud es prioridad y merece atención inmediata.",
-        "¿Has evitado situaciones que aumentan la dificultad para respirar?",
-        "Mantener la calma puede ayudarte a controlar la respiración.",
-        "If la dificultad es constante, acude a un especialista pronto.",
-        "Estoy aquí para escucharte y apoyarte.",
-        "No estás solo/a, y hay ayuda para ti."
-    ],
-    "Problemas de alimentación": [
-        "Los problemas de alimentación pueden afectar tu salud integral.",
-        "¿Quieres contarme qué dificultades estás experimentando?",
-        "Hablar de tus hábitos puede ayudarte a entender mejor la situación.",
-        "Reconocer el problema es el primer paso para buscar soluciones.",
-        "¿Sientes que tu relación con la comida ha cambiado?",
-        "¿Has notado si comes menos, más o de forma irregular?",
-        "Buscar apoyo puede facilitar que mejores tus hábitos alimenticios.",
-        "¿Tienes alguien con quien puedas compartir tus sentimientos?",
-        "El cuidado nutricional es importante para tu bienestar general.",
-        "¿Quieres contarme cómo te sientes emocionalmente respecto a la comida?",
-        "Pequeños cambios pueden hacer una gran diferencia.",
-        "Si los problemas persisten, considera ayuda profesional.",
-        "Recuerda que mereces cuidar tu cuerpo y mente.",
-        "Estoy aquí para escucharte y acompañarte en esto.",
-        "Buscar ayuda es un acto de valentía y cuidado personal."
-    ],
-    "Pensamientos intrusivos": [
-        "Los pensamientos intrusivos pueden ser muy molestos.",
-        "¿Quieres contarme qué tipo de pensamientos te molestan?",
-        "Hablar sobre ellos puede ayudarte a reducir su impacto.",
-        "Reconcerlos es un paso para poder manejarlos mejor.",
-        "¿Sientes que afectan tu día a día o tu bienestar?",
-        "¿Has probado técnicas para distraer tu mente o relajarte?",
-        "Buscar apoyo puede facilitar que encuentres estrategias útiles.",
-        "¿Tienes alguien con quien puedas compartir estas experiencias?",
-        "¿Quieres contarme cuándo suelen aparecer estos pensamientos?",
-        "Practicar mindfulness puede ayudarte a observar sin juzgar.",
-        "Es normal tener pensamientos intrusivos, no te defines por ellos.",
-        "Si son muy intensos, considera ayuda profesional.",
-        "Recuerda que mereces paz mental y emocional.",
-        "Estoy aquí para escucharte y apoyarte en este camino.",
-        "Hablar y compartir puede ser parte de tu sanación."
-    ],
-    "Problemas familiares": [
-        "Las relaciones familiares pueden ser complejas, es válido sentirte así.",
-        "¿Quieres contarme qué tipo de conflicto estás viviendo en casa?",
-        "A veces, expresar lo que sientes puede aliviar tensiones con tus seres queridos.",
-        "¿Sientes que te entienden en tu entorno familiar?",
-        "Hablar de los problemas familiares es un paso para encontrar soluciones.",
-        "¿Qué te gustaría que cambiara en tu relación con tu familia?",
-        "Recuerda que cuidar tu bienestar emocional también es importante en medio de conflictos.",
-        "¿Tienes algún familiar con quien puedas hablar con confianza?",
-        "Establecer límites sanos puede ayudarte a sentirte mejor.",
-        "Si el ambiente familiar te genera malestar constante, es válido buscar apoyo externo.",
-        "¿Has intentado dialogar con alguien de tu familia recientemente?",
-        "No estás solo/a, muchos pasamos por conflictos similares.",
-        "¿Quieres contarme cómo ha sido tu experiencia en tu hogar últimamente?",
-                "Reconocer el problema es un paso importante para tu sanación.",
-        "Si sientes que no puedes manejarlo solo/a, un profesional puede ayudarte."
-    ],
-    "Problemas de pareja": [
-        "Las relaciones tienen altibajos, es válido buscar apoyo.",
-        "¿Quieres contarme qué pasa con tu pareja?",
-        "Expresar tus emociones puede ayudarte a entender mejor.",
-        "¿Sientes que la relación te afecta emocionalmente?",
-        "Los conflictos son comunes, pero mereces sentirte escuchado.",
-        "¿Qué te gustaría mejorar en la relación?",
-        "El respeto mutuo es clave.",
-        "¿Tienes alguien para hablar cuando se complica la relación?",
-        "Pedir ayuda es sano cuando cargas mucho emocionalmente.",
-        "Hablar con un profesional puede aclarar tus sentimientos."
-    ]
-}
-
-class SistemaConversacional:
-    def __init__(self):
-        self.historial = []
-        self.contador_interacciones = 0
-        self.contexto_actual = None
-        self.sistema_aprendizaje = SistemaAprendizaje()
-        self.engagement_actual = 5
-        self.max_historial = 100
-
-    def to_dict(self):
-        return {
-            'historial': self.historial[-self.max_historial:],
-            'contador_interacciones': self.contador_interacciones,
-            'contexto_actual': self.contexto_actual,
-            'engagement_actual': self.engagement_actual
-        }
-    
-    @classmethod
-    def from_dict(cls, data):
-        instance = cls()
-        instance.historial = data.get('historial', [])
-        instance.contador_interacciones = data.get('contador_interacciones', 0)
-        instance.contexto_actual = data.get('contexto_actual', None)
-        instance.engagement_actual = data.get('engagement_actual', 5)
-        return instance
-
-    def obtener_respuesta_predefinida(self, sintoma):
-        respuestas_genericas = [
-            "Entiendo que estés pasando por un momento difícil. ¿Qué has intentado para manejar esta situación?",
-            "Es completamente normal sentirse así. ¿Te gustaría hablar más sobre qué desencadenó estos sentimientos?",
-            "Agradezco que compartas esto conmigo. ¿Cómo ha afectado esto tu día a día?",
-            "Parece que esto te está afectando profundamente. ¿Puedes contarme un poco más?",
-            "Tu bienestar es importante. ¿Qué crees que podría ayudarte en este momento?",
-        ]
-        return random.choice(respuestas_genericas)
-
-    def obtener_respuesta_ia(self, sintoma, user_input):
-        try:
-            contexto = f"""
-            El usuario está experimentando: {sintoma}. 
-            Historial reciente: {str(self.historial[-2:]) if len(self.historial) > 2 else 'Primera interacción'}
-            Último mensaje del usuario: "{user_input}"
-            
-            Por favor, responde de manera empática y profesional.
-            IMPORTANTE: NO sugieras cita a menos que el usuario la solicite explícitamente.
-            """
-            
-            respuesta = generar_respuesta_llm(contexto, sintoma)
-            
-            if respuesta and len(respuesta) > 10:
-                return respuesta
-        except Exception as e:
-            app.logger.error(f"Error al obtener respuesta de IA: {e}")
-        
-        return self.obtener_respuesta_predefinida(sintoma)
-
-    def obtener_respuesta(self, sintoma, user_input):
-        if detectar_crisis(user_input):
-            return "⚠️ **Crisis detectada**\n\nVeo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato.\n\n📞 **Líneas de ayuda inmediata:**\n• Línea de crisis: 911\n• Tu psicólogo de confianza\n• Servicios de emergencia local\n\nNo estás solo/a, busca ayuda profesional ahora."
-
-        # Intentar con respuesta aprendida primero
-        respuesta_aprendida = self.sistema_aprendizaje.obtener_mejor_respuesta(sintoma, user_input)
-        if respuesta_aprendida:
-            app.logger.info(f"Usando respuesta aprendida para {sintoma}")
-            self.contador_interacciones += 1
-            return respuesta_aprendida
-
-        # Si no hay respuesta aprendida, usar IA
-        respuesta_ia = self.obtener_respuesta_ia(sintoma, user_input)
-        self.contador_interacciones += 1
-        
-        # Aprender de esta interacción
-        self.aprender_de_interaccion(sintoma, user_input, respuesta_ia)
-        
-        return respuesta_ia
-
-    def aprender_de_interaccion(self, sintoma, user_input, respuesta_bot):
-        engagement = min(10, len(user_input) / 10)
-        self.sistema_aprendizaje.evaluar_respuesta(sintoma, user_input, respuesta_bot, engagement)
-        self.aprender_patrones(user_input, respuesta_bot)
-
-    def aprender_patrones(self, user_input, respuesta_bot):
-        palabras_usuario = set(user_input.lower().split())
-        palabras_bot = set(respuesta_bot.lower().split())
-        
-        for palabra in palabras_usuario:
-            if palabra not in self.sistema_aprendizaje.patrones_conversacion:
-                self.sistema_aprendizaje.patrones_conversacion[palabra] = {}
-            
-            for palabra_bot in palabras_bot:
-                if palabra_bot not in self.sistema_aprendizaje.patrones_conversacion[palabra]:
-                    self.sistema_aprendizaje.patrones_conversacion[palabra][palabra_bot] = 0
-                self.sistema_aprendizaje.patrones_conversacion[palabra][palabra_bot] += 1
-        
-        self.sistema_aprendizaje.guardar_aprendizaje()
-
-    def agregar_interaccion(self, tipo, mensaje, sintoma=None):
-        if len(self.historial) >= self.max_historial:
-            self.historial.pop(0)
-            
-        interaccion = {
-            'tipo': tipo,
-            'mensaje': mensaje,
-            'sintoma': sintoma,
-            'timestamp': datetime.now().strftime("%H:%M:%S")
-        }
-        self.historial.append(interaccion)
-        
-        if tipo == 'user' and len(self.historial) > 1:
-            ultima_respuesta_bot = self.historial[-2] if self.historial[-2]['tipo'] == 'bot' else None
-            if ultima_respuesta_bot:
-                self.engagement_actual = min(10, len(mensaje) / 15)
-                self.aprender_de_interaccion(
-                    ultima_respuesta_bot['sintoma'] or "general",
-                    mensaje,
-                    ultima_respuesta_bot['mensaje']
-                )
-
-# Nota: Las funciones de agendamiento ahora están en services.appointment_service
-# - get_calendar_service()
-# - crear_evento_calendar()
-# - parsear_fecha_google()
-# - enviar_correo_confirmacion()
-# - enviar_correo_resend()
-# - verificar_disponibilidad_atomica()
-
-# Endpoints de diagnóstico
-@app.route('/debug-env')
-def debug_env():
-    """Verificar variables de entorno"""
-    env_vars = {
-        'GOOGLE_CREDENTIALS_SET': bool(os.getenv('GOOGLE_CREDENTIALS')),
-        'GOOGLE_CREDENTIALS_LENGTH': len(os.getenv('GOOGLE_CREDENTIALS', '')),
-        'GROQ_API_KEY_SET': bool(os.getenv('GROQ_API_KEY')),
-        'GROQ_API_KEY_VALUE': '***' + os.getenv('GROQ_API_KEY', '')[-4:] if os.getenv('GROQ_API_KEY') else 'NO_CONFIGURADA',
-        'EMAIL_USER_SET': bool(os.getenv('EMAIL_USER')),
-        'FLASK_ENV': os.getenv('FLASK_ENV'),
-        'RENDER': os.getenv('RENDER'),
-        'RENDER_EXTERNAL_HOSTNAME': os.getenv('RENDER_EXTERNAL_HOSTNAME'),
-        'PORT': os.getenv('PORT'),
-        'FLASK_SECRET_KEY_SET': bool(os.getenv('FLASK_SECRET_KEY')),
-        'RESEND_API_KEY_SET': bool(os.getenv('RESEND_API_KEY')),
-        'PSICOLOGO_EMAIL_SET': bool(os.getenv('PSICOLOGO_EMAIL'))
-    }
-    return jsonify(env_vars)
-
-@app.route('/debug-env-detailed')
-def debug_env_detailed():
-    """Verificar TODAS las variables de entorno disponibles"""
-    all_env_vars = dict(os.environ)
-    # Ocultar valores sensibles
-    safe_env_vars = {}
-    for key, value in all_env_vars.items():
-        if 'KEY' in key or 'SECRET' in key or 'PASSWORD' in key or 'CREDENTIALS' in key:
-            safe_env_vars[key] = '***' + value[-4:] if len(value) > 4 else '***'
-        else:
-            safe_env_vars[key] = value
-    
-    return jsonify({
-        'total_variables': len(safe_env_vars),
-        'variables': safe_env_vars
-    })
-
-@app.route('/test-calendar-connection')
-def test_calendar_connection():
-    """Probar conexión con Google Calendar"""
-    try:
-        service = get_calendar_service()
-        if not service:
-            return jsonify({"error": "No se pudo crear el servicio"})
-        
-        # Probar listar calendarios
-        calendars = service.calendarList().list().execute()
-        
-        # Probar crear y eliminar evento de prueba
-        test_event = {
-            'summary': 'Test Connection - DELETE',
-            'start': {'dateTime': '2025-01-01T10:00:00-05:00', 'timeZone': 'America/Guayaquil'},
-            'end': {'dateTime': '2025-01-01T11:00:00-05:00', 'timeZone': 'America/Guayaquil'},
-        }
-        
-        created_event = service.events().insert(calendarId='primary', body=test_event).execute()
-        event_id = created_event['id']
-        
-        # Eliminar evento de prueba
-        service.events().delete(calendarId='primary', eventId=event_id).execute()
-        
-        return jsonify({
-            "status": "success",
-            "calendars": len(calendars.get('items', [])),
-            "message": "✅ Conexión exitosa con Google Calendar"
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# Iniciar hilos de limpieza solo si no estamos en entorno de testing
-if os.environ.get('FLASK_ENV') == 'production' and not os.environ.get('TESTING'):
-    try:
-        hilo_limpieza = threading.Thread(target=limpiar_datos_aprendizaje, daemon=True)
-        hilo_limpieza.start()
-        
-        hilo_limpieza_cache = threading.Thread(target=limpiar_cache_horarios, daemon=True)
-        hilo_limpieza_cache.start()
-        
-        hilo_limpieza_cache_respuestas = threading.Thread(target=limpiar_cache_respuestas, daemon=True)
-        hilo_limpieza_cache_respuestas.start()
-        
-        app.logger.info("Hilos de limpieza iniciados (aprendizaje, horarios, respuestas IA)")
-    except Exception as e:
-        app.logger.error(f"Error iniciando hilos de limpieza: {e}")
-
 @app.route("/", methods=["GET", "POST"])
 @limiter.limit("500 per hour")
 def index():
@@ -1131,41 +178,7 @@ def index():
 @limiter.limit("50 per hour")
 def reset():
     try:
-        # Guardar conversación en DB antes de limpiar sesión
-        try:
-            conv_data = session.get("conversacion_data", {})
-            interacciones = conv_data.get("interacciones", [])
-            telefono = session.get("telefono_cita")
-            if interacciones:
-                from models import Conversation as ConvModel, Patient
-                from models import db as _db
-                patient = Patient.query.filter_by(phone=telefono).first() if telefono else None
-                symptoms = list({i.get("sintoma") for i in interacciones if i.get("sintoma")})
-                conv = ConvModel(
-                    patient_id=patient.id if patient else None,
-                    session_id=session.get("_id", ""),
-                    ended_at=datetime.utcnow(),
-                )
-                conv.messages = interacciones
-                conv.detected_symptoms = symptoms
-                _db.session.add(conv)
-                _db.session.commit()
-        except Exception as conv_err:
-            app.logger.warning(f"No se pudo guardar conversación en DB: {conv_err}")
-
-        session.clear()
-        conversacion = SistemaConversacional()
-        session["conversacion_data"] = conversacion.to_dict()
-        session["estado"] = "inicio"
-        session["sintoma_actual"] = None
-        session["fechas_validas"] = {
-            'hoy': datetime.now().strftime('%Y-%m-%d'),
-            'min_cita': datetime.now().strftime('%Y-%m-%d'),
-            'max_cita': (datetime.now() + timedelta(days=30)).strftime('%Y-%m-%d'),
-            'min_sintoma': (datetime.now() - timedelta(days=365*5)).strftime('%Y-%m-%d'),
-            'max_sintoma': datetime.now().strftime('%Y-%m-%d')
-        }
-        
+        ConversationService().reset_session()
         app.logger.info("Sesión reiniciada por el usuario")
         return jsonify({"status": "success"})
     except Exception as e:
@@ -1176,12 +189,7 @@ def reset():
 @limiter.limit("50 per hour")
 def cancelar_cita():
     try:
-        if "conversacion_data" in session:
-            conversacion = SistemaConversacional.from_dict(session["conversacion_data"])
-            session["estado"] = "profundizacion"
-            conversacion.agregar_interaccion('bot', "Entendido, he cancelado el proceso de agendamiento de cita. ¿Hay algo más en lo que pueda ayudarte?", session.get("sintoma_actual"))
-            session["conversacion_data"] = conversacion.to_dict()
-        
+        ConversationService().cancel_appointment_flow()
         return jsonify({"status": "success", "message": "Proceso de cita cancelado"})
     except Exception as e:
         app.logger.error(f"Error al cancelar cita: {e}")
@@ -1288,8 +296,7 @@ def obtener_horarios_disponibles():
         except ValueError:
             return jsonify({"error": "Formato de fecha inválido"}), 400
         
-        # Obtener horarios disponibles con validaciones estrictas
-        horarios_disponibles = obtener_horarios_disponibles_estrictos(fecha)
+        horarios_disponibles = validation_service.get_available_time_slots(fecha)
         
         return jsonify(horarios_disponibles)
         
@@ -1314,24 +321,20 @@ def agendar_cita():
         hora = data["hora"]
         telefono = data["telefono"]
         sintoma = data["sintoma"]
-        
+
+        if sintoma not in SINTOMAS_DISPONIBLES:
+            return jsonify({"error": "Síntoma no válido"}), 400
+
         # Usar la función completa de agendamiento
-        success, message, evento_url = agendar_cita_completa(fecha, hora, telefono, sintoma)
-        
+        success, message, calendar_event_id = agendar_cita_completa(fecha, hora, telefono, sintoma)
+
         if not success:
-            # Determinar código de error apropiado
             if "inválido" in message.lower() or "formato" in message.lower():
                 return jsonify({"error": message}), 400
             elif "no disponible" in message.lower() or "ocupado" in message.lower():
                 return jsonify({"error": message}), 409
             else:
                 return jsonify({"error": message}), 500
-        
-        # Limpiar cache para esta fecha/hora
-        with cache_lock:
-            cache_key = f"{fecha}_{hora}"
-            if cache_key in horarios_cache:
-                del horarios_cache[cache_key]
 
         # Guardar cita y paciente en la base de datos
         try:
@@ -1347,7 +350,7 @@ def agendar_cita():
                 scheduled_at=scheduled_dt,
                 symptom=sintoma,
                 status="pending",
-                calendar_event_id=evento_url,
+                calendar_event_id=calendar_event_id,  # ID real del evento
             )
             db.session.add(appt)
             db.session.commit()
@@ -1355,12 +358,11 @@ def agendar_cita():
             app.logger.warning(f"No se pudo guardar cita en DB: {db_err}")
 
         app.logger.info(f"✅ Cita agendada exitosamente: {fecha} {hora} para {telefono}")
-        
+
         # Actualizar sesión para mostrar estado final
         if "conversacion_data" not in session:
             session["conversacion_data"] = {"interacciones": []}
-        
-        # Agregar mensajes de confirmación al historial
+
         mensaje_confirmacion = (
             f"✅ **Cita confirmada**\n\n"
             f"📅 **Fecha:** {fecha}\n"
@@ -1368,185 +370,60 @@ def agendar_cita():
             f"📱 **Teléfono:** {telefono}\n\n"
             f"Tu cita ha sido registrada correctamente."
         )
-        
         mensaje_cierre = (
             f"💚 **Gracias por agendar con Equilibra**\n\n"
             f"Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
             f"Gracias por confiar en este espacio."
         )
-        
-        # Agregar mensajes al historial
+
         conversacion_data = session["conversacion_data"]
         conversacion_data.setdefault("interacciones", []).extend([
-            {
-                "tipo": "bot",
-                "mensaje": mensaje_confirmacion,
-                "sintoma": sintoma,
-                "timestamp": datetime.now().isoformat()
-            },
-            {
-                "tipo": "bot",
-                "mensaje": mensaje_cierre,
-                "sintoma": sintoma,
-                "timestamp": datetime.now().isoformat()
-            }
+            {"tipo": "bot", "mensaje": mensaje_confirmacion, "sintoma": sintoma,
+             "timestamp": datetime.now().isoformat()},
+            {"tipo": "bot", "mensaje": mensaje_cierre, "sintoma": sintoma,
+             "timestamp": datetime.now().isoformat()},
         ])
-        
-        # Cambiar estado a final
         session["estado"] = "fin"
         session["conversacion_data"] = conversacion_data
-        
+
         return jsonify({
             "status": "success",
             "message": "Cita agendada exitosamente",
-            "evento_url": evento_url
         })
         
     except Exception as e:
         app.logger.error(f"Error al agendar cita: {e}")
         return jsonify({"error": "Error al procesar la cita"}), 500
 
-@app.route('/debug-calendario', methods=["GET"])
-def debug_calendario():
-    """Endpoint para debug del calendario"""
-    try:
-        service = get_calendar_service()
-        if not service:
-            return jsonify({"error": "No hay servicio de calendario"})
-        
-        # Verificar eventos de hoy y mañana
-        hoy = datetime.now().strftime("%Y-%m-%dT00:00:00-05:00")
-        mañana = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%dT00:00:00-05:00")
-        
-        eventos = service.events().list(
-            calendarId='primary',
-            timeMin=hoy,
-            timeMax=mañana,
-            singleEvents=True,
-            maxResults=50,
-            orderBy='startTime'
-        ).execute()
-        
-        eventos_info = []
-        for evento in eventos.get('items', []):
-            eventos_info.append({
-                'summary': evento.get('summary', 'Sin título'),
-                'start': evento['start'],
-                'end': evento['end'],
-                'id': evento.get('id')
-            })
-        
-        return jsonify({
-            "total_eventos": len(eventos.get('items', [])),
-            "eventos": eventos_info
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
-@app.route('/test-calendar', methods=["GET"])
-def test_calendar():
-    """Probar conexión con Google Calendar"""
-    try:
-        service = get_calendar_service()
-        if not service:
-            return jsonify({"error": "No se pudo crear el servicio"})
-        
-        # Intentar listar calendarios
-        calendars = service.calendarList().list().execute()
-        
-        # Probar acceso de escritura creando un evento de prueba 
-        test_event = {
-            'summary': 'Test Equilibra - Borrar',
-            'start': {'dateTime': '2025-01-01T10:00:00-05:00', 'timeZone': 'America/Guayaquil'},
-            'end': {'dateTime': '2025-01-01T11:00:00-05:00', 'timeZone': 'America/Guayaquil'},
-        }
-        
-        created_event = service.events().insert(calendarId='primary', body=test_event).execute()
-        event_id = created_event['id']
-        
-        # Borrar el evento de prueba
-        service.events().delete(calendarId='primary', eventId=event_id).execute()
-        
-        return jsonify({
-            "status": "success", 
-            "calendars": [cal['summary'] for cal in calendars.get('items', [])],
-            "message": "✅ Conexión exitosa con Google Calendar - Permisos de lectura/escritura confirmados"
-        })
-        
-    except HttpError as e:
-        if e.resp.status == 403:
-            return jsonify({"error": "❌ Error 403: Permisos insuficientes. Verifica que la cuenta de servicio tenga permisos de escritura."})
-        else:
-            return jsonify({"error": f"❌ Error de Google Calendar: {e}"})
-    except Exception as e:
-        return jsonify({"error": f"❌ Error general: {str(e)}"})
-
 @app.route('/health')
 def health_check():
+    """
+    Health check ligero: verifica configuración de servicios sin hacer llamadas externas.
+    Para evitar latencia en monitoreos frecuentes (Render, UptimeRobot, etc.).
+    """
     try:
         groq_ok = bool(os.getenv('GROQ_API_KEY'))
-        email_ok = bool(os.getenv('EMAIL_USER')) and bool(os.getenv('EMAIL_PASSWORD'))
-        
-        # Probar Google Calendar
-        calendar_ok = False
-        calendar_message = "No configurado"
+        email_ok = bool(os.getenv('RESEND_API_KEY'))
+        calendar_ok = bool(os.getenv('GOOGLE_CREDENTIALS'))
+        db_ok = False
         try:
-            service = get_calendar_service()
-            if service:
-                
-                service.calendarList().list().execute()
-                calendar_ok = True
-                calendar_message = "Conectado"
-            else:
-                calendar_message = "Error en credenciales"
-        except Exception as e:
-            calendar_message = f"Error: {str(e)}"
-        
-        # Información del caché de respuestas IA
-        with respuestas_ia_cache_lock:
-            cache_size = len(respuestas_ia_cache)
-            cache_hit_rate = "N/A"  # Podría calcularse con métricas
-        
+            db.session.execute(db.text("SELECT 1"))
+            db_ok = True
+        except Exception:
+            pass
+
+        all_ok = all([groq_ok, email_ok, calendar_ok, db_ok])
         return jsonify({
-            'status': 'healthy' if all([groq_ok, email_ok, calendar_ok]) else 'degraded',
+            'status': 'healthy' if all_ok else 'degraded',
             'services': {
                 'groq': groq_ok,
                 'email': email_ok,
-                'calendar': {'ok': calendar_ok, 'message': calendar_message}
+                'calendar': calendar_ok,
+                'database': db_ok,
             },
-            'cache': {
-                'respuestas_ia_size': cache_size,
-                'max_size': CACHE_MAX_SIZE,
-                'ttl_seconds': CACHE_TTL
-            }
-        })
+        }), 200 if all_ok else 503
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
-
-@app.route('/debug-cache')
-def debug_cache():
-    """Endpoint para debug del caché de respuestas IA"""
-    try:
-        with respuestas_ia_cache_lock:
-            cache_info = {
-                'total_entries': len(respuestas_ia_cache),
-                'max_size': CACHE_MAX_SIZE,
-                'ttl_seconds': CACHE_TTL,
-                'entries': []
-            }
-            
-            # Mostrar algunas entradas de ejemplo (limitado a 5)
-            for i, (key, (timestamp, respuesta)) in enumerate(list(respuestas_ia_cache.items())[:5]):
-                cache_info['entries'].append({
-                    'key': key[:12] + '...',
-                    'age_seconds': int(time.time() - timestamp),
-                    'respuesta_preview': respuesta[:100] + '...' if len(respuesta) > 100 else respuesta
-                })
-            
-            return jsonify(cache_info)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 # Ruta para sitemap.xml 
 @app.route('/sitemap.xml')
@@ -1589,6 +466,19 @@ Sitemap: {request.url_root.rstrip('/')}/sitemap.xml
     response = make_response(robots_txt)
     response.headers["Content-Type"] = "text/plain"
     return response
+
+@app.after_request
+def set_security_headers(response):
+    """Agrega headers de seguridad HTTP a todas las respuestas."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    if os.environ.get("FLASK_ENV") == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
 
 @app.errorhandler(429)
 def ratelimit_handler(e):

@@ -5,12 +5,15 @@ Servicio de agendamiento de citas - Lógica compartida entre app.py y conversati
 import os
 import json
 import logging
+import time
+import threading
 from datetime import datetime
 from typing import Tuple, Dict, Any, Optional
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from dateutil import parser
+from sqlalchemy.exc import IntegrityError
 import resend
 
 logger = logging.getLogger(__name__)
@@ -30,107 +33,120 @@ def validar_horario_cita(fecha_str: str, hora_str: str) -> Tuple[bool, str]:
     """Validación estricta de horarios de cita"""
     return validation_service.validate_appointment_time(fecha_str, hora_str)
 
-# ==================== GOOGLE CALENDAR ====================
+# ==================== GOOGLE CALENDAR (singleton con TTL) ====================
+
+_calendar_service_cache: Dict[str, Any] = {"service": None, "ts": 0.0}
+_calendar_service_lock = threading.Lock()
+_CALENDAR_SERVICE_TTL = 3600  # reutilizar el cliente durante 1 hora
+
 
 def get_calendar_service():
-    """Obtener servicio de Google Calendar"""
+    """
+    Obtiene el cliente de Google Calendar.
+    Reutiliza la instancia durante _CALENDAR_SERVICE_TTL segundos para
+    evitar crear una nueva conexión en cada request.
+    """
+    with _calendar_service_lock:
+        cached = _calendar_service_cache
+        if cached["service"] is not None and (time.time() - cached["ts"]) < _CALENDAR_SERVICE_TTL:
+            return cached["service"]
+
+    # Construir nueva instancia fuera del lock para no bloquear durante I/O
+    service = _build_calendar_service()
+
+    with _calendar_service_lock:
+        _calendar_service_cache["service"] = service
+        _calendar_service_cache["ts"] = time.time()
+
+    return service
+
+
+def _build_calendar_service():
+    """Construye un cliente de Google Calendar desde las credenciales de entorno."""
     try:
         google_credentials = os.getenv('GOOGLE_CREDENTIALS')
         if not google_credentials:
-            logger.error("❌ GOOGLE_CREDENTIALS no configuradas")
+            logger.error("GOOGLE_CREDENTIALS no configuradas")
             return None
-        
-        # Limpiar y verificar credenciales
+
         google_credentials = google_credentials.strip()
-        logger.info(f"Longitud de credenciales: {len(google_credentials)}")
-        
+
         try:
             creds_dict = json.loads(google_credentials)
-            logger.info("✅ Credenciales JSON parseadas correctamente")
         except json.JSONDecodeError as e:
-            logger.error(f"❌ Error parseando JSON: {e}")
-            logger.error(f"Primeros 100 caracteres: {google_credentials[:100]}")
+            logger.error(f"Error parseando GOOGLE_CREDENTIALS JSON: {e}")
             return None
-            
-        # Verificar campos requeridos
+
         required_fields = ['type', 'project_id', 'private_key_id', 'private_key', 'client_email']
-        missing_fields = [field for field in required_fields if field not in creds_dict]
-        
-        if missing_fields:
-            logger.error(f"❌ Campos faltantes: {missing_fields}")
+        missing = [f for f in required_fields if f not in creds_dict]
+        if missing:
+            logger.error(f"Campos faltantes en credenciales: {missing}")
             return None
-        
-        # Crear credenciales
+
         creds = service_account.Credentials.from_service_account_info(
             creds_dict,
-            scopes=['https://www.googleapis.com/auth/calendar']
+            scopes=['https://www.googleapis.com/auth/calendar'],
         )
-        
         service = build('calendar', 'v3', credentials=creds, cache_discovery=False)
-        logger.info("✅ Servicio de calendario creado exitosamente")
+        logger.info("Servicio de Google Calendar creado exitosamente")
         return service
-        
+
     except Exception as e:
-        logger.error(f"❌ Error al obtener servicio de calendario: {e}")
+        logger.error(f"Error creando servicio de calendario: {e}")
         return None
 
-def crear_evento_calendar(fecha: str, hora: str, telefono: str, sintoma: str) -> Optional[str]:
-    """Crear evento en Google Calendar"""
+def crear_evento_calendar(fecha: str, hora: str, telefono: str, sintoma: str) -> Optional[Dict[str, str]]:
+    """
+    Crear evento en Google Calendar.
+    Retorna dict con 'event_id' (para guardar en DB) y 'html_link' (para mostrar al usuario),
+    o None si falla.
+    """
     try:
-        # Validar fecha y hora
         datetime.strptime(fecha, "%Y-%m-%d")
         datetime.strptime(hora, "%H:%M")
-        
+
         service = get_calendar_service()
         if not service:
             logger.error("No se pudo obtener el servicio de calendario")
             return None
-            
-        # Crear el evento con este formato 
+
         start_time = f"{fecha}T{hora}:00-05:00"
         end_time = f"{fecha}T{int(hora.split(':')[0])+1}:00:00-05:00"
-        
+
         event = {
             'summary': f'Cita Psicológica - {sintoma}',
-            'description': f'Teléfono del paciente: {telefono}\nSíntoma principal: {sintoma}\nCita agendada a través de Equilibra',
-            'start': {
-                'dateTime': start_time,
-                'timeZone': 'America/Guayaquil',
-            },
-            'end': {
-                'dateTime': end_time,
-                'timeZone': 'America/Guayaquil',
-            },
+            'description': (
+                f'Teléfono del paciente: {telefono}\n'
+                f'Síntoma principal: {sintoma}\n'
+                f'Cita agendada a través de Equilibra'
+            ),
+            'start': {'dateTime': start_time, 'timeZone': 'America/Guayaquil'},
+            'end': {'dateTime': end_time, 'timeZone': 'America/Guayaquil'},
             'reminders': {
                 'useDefault': False,
                 'overrides': [
-                    {'method': 'email', 'minutes': 24 * 60},  # 1 día antes
-                    {'method': 'popup', 'minutes': 30},       # 30 minutos antes
+                    {'method': 'email', 'minutes': 24 * 60},
+                    {'method': 'popup', 'minutes': 30},
                 ],
             },
         }
-        
+
         logger.info(f"Intentando crear evento: {fecha} {hora} para {telefono}")
-        
-        # Intentar crear el evento
-        event_created = service.events().insert(
-            calendarId='primary',
-            body=event
-        ).execute()
-        
-        evento_url = event_created.get('htmlLink')
-        logger.info(f"✅ Evento creado exitosamente: {evento_url}")
-        
-        return evento_url
-        
+        event_created = service.events().insert(calendarId='primary', body=event).execute()
+
+        event_id = event_created.get('id')
+        html_link = event_created.get('htmlLink')
+        logger.info(f"✅ Evento creado exitosamente. ID: {event_id}")
+
+        return {'event_id': event_id, 'html_link': html_link}
+
     except ValueError as ve:
         logger.error(f"❌ Formato de fecha/hora inválido: {ve}")
         return None
     except HttpError as error:
         logger.error(f"❌ Error de Google Calendar API: {error}")
-        # Mostrar más detalles del error
         if error.resp.status == 403:
-            logger.error("❌ Error 403: Permisos insuficientes. Verifica que la cuenta de servicio tenga permisos de escritura.")
+            logger.error("❌ Error 403: Permisos insuficientes.")
         elif error.resp.status == 404:
             logger.error("❌ Error 404: Calendario no encontrado.")
         return None
@@ -281,8 +297,10 @@ def enviar_correo_confirmacion(destinatario: str, fecha: str, hora: str, telefon
 
 def agendar_cita_completa(fecha: str, hora: str, telefono: str, sintoma: str) -> Tuple[bool, str, Optional[str]]:
     """
-    Función principal para agendar una cita completa
-    Returns: (success, message, evento_url)
+    Función principal para agendar una cita completa.
+    Returns: (success, message, calendar_event_id)
+      - calendar_event_id: ID real del evento en Google Calendar (para guardar en DB).
+        El html_link se puede construir desde el panel o no se necesita exponer.
     """
     try:
         # 1. Validar teléfono
@@ -290,42 +308,42 @@ def agendar_cita_completa(fecha: str, hora: str, telefono: str, sintoma: str) ->
         if not valido:
             logger.error(f"Teléfono inválido: {mensaje_error}")
             return False, mensaje_error, None
-        
+
         # 2. Validación estricta de horario
         es_valido, mensaje_validacion = validar_horario_cita(fecha, hora)
         if not es_valido:
             logger.error(f"Horario inválido: {mensaje_validacion}")
             return False, mensaje_validacion, None
-        
+
         # 3. Verificación atómica estricta de disponibilidad
         verificacion = verificar_disponibilidad_atomica(fecha, hora)
         if not verificacion.get("disponible", False):
             error_msg = verificacion.get("error", "El horario ya no está disponible")
             logger.error(f"Horario no disponible: {error_msg}")
             return False, error_msg, None
-        
+
         # 4. Crear evento en Google Calendar
-        evento_url = crear_evento_calendar(fecha, hora, telefono, sintoma)
-        if not evento_url:
+        evento_data = crear_evento_calendar(fecha, hora, telefono, sintoma)
+        if not evento_data:
             logger.error("Error al crear evento en Google Calendar")
             return False, "Error al crear la cita en el calendario", None
-        
+
+        calendar_event_id = evento_data['event_id']
+
         # 5. Enviar correo de confirmación (no bloqueante)
         email_enviado = enviar_correo_confirmacion(
-            "chatbotequilibra@gmail.com",
-            fecha,
-            hora,
-            telefono,
-            sintoma
+            "chatbotequilibra@gmail.com", fecha, hora, telefono, sintoma
         )
-        
         if not email_enviado:
-            logger.warning("⚠️ Email no enviado (pero cita creada en calendario)")
-            # No fallar si el email no se envía, solo loggear warning
-        
-        logger.info(f"✅ Cita agendada exitosamente: {fecha} {hora} para {telefono}")
-        return True, "Cita agendada exitosamente", evento_url
-        
+            logger.warning("Email no enviado (cita creada en calendario)")
+
+        logger.info(f"Cita agendada exitosamente: {fecha} {hora} para {telefono}")
+        return True, "Cita agendada exitosamente", calendar_event_id
+
+    except IntegrityError:
+        # El constraint uq_appointments_scheduled_at_active capturó un doble booking
+        logger.warning(f"Doble booking bloqueado por constraint DB: {fecha} {hora}")
+        return False, "Ese horario acaba de ser reservado. Por favor elige otro.", None
     except Exception as e:
         logger.error(f"Error al agendar cita: {e}")
         return False, str(e), None

@@ -5,6 +5,10 @@ from . import db
 
 class Patient(db.Model):
     __tablename__ = "patients"
+    __table_args__ = (
+        db.Index("ix_patients_phone", "phone"),
+        db.Index("ix_patients_last_contact", "last_contact"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)

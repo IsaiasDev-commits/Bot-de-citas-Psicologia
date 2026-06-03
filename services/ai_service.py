@@ -9,10 +9,10 @@ import threading
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any
 import re
-import html
 from groq import Groq
 from functools import wraps
 import logging
+from constants import CRISIS_PATTERNS, CRISIS_RESPONSE
 
 logger = logging.getLogger(__name__)
 
@@ -84,29 +84,16 @@ def log_execution(func):
 # ==================== STRATEGY PATTERN ====================
 
 class AIServiceStrategy(ABC):
-    """
-    Interfaz Strategy para servicios de IA
-    """
-    
+    """Interfaz Strategy para servicios de IA."""
+
     @abstractmethod
     def generate_response(self, text: str, symptom: str = None) -> str:
-        """
-        Genera una respuesta de IA para el texto dado
-        """
+        """Genera una respuesta de IA para el texto dado."""
         pass
-    
+
     @abstractmethod
     def select_model(self, text_length: int, complexity: str) -> str:
-        """
-        Selecciona el modelo apropiado basado en la situación
-        """
-        pass
-    
-    @abstractmethod
-    def format_response(self, raw_response: str) -> str:
-        """
-        Formatea la respuesta de IA para mejor presentación
-        """
+        """Selecciona el modelo apropiado basado en la situación."""
         pass
 
 class GroqAIService(AIServiceStrategy):
@@ -136,63 +123,6 @@ class GroqAIService(AIServiceStrategy):
             return self.available_models['balanced']
         else:
             return self.available_models['fast']
-    
-    def format_response(self, raw_response: str) -> str:
-        """
-        Formatea la respuesta de la IA para separar ideas y consejos
-        """
-        if not raw_response:
-            return raw_response
-        
-        # Patrones para detectar diferentes tipos de contenido
-        advice_patterns = [
-            r'(\d+[\.\)]?\s*)',  # 1. 2) etc.
-            r'[•\-]\s*',         # • - 
-            r'Consejo\s*\d*:',   # Consejo 1:
-            r'Recomendación\s*\d*:',  # Recomendación 2:
-            r'Sugerencia\s*\d*:',     # Sugerencia 3:
-            r'💡',                # Emoji de bombilla
-            r'⭐',                # Emoji de estrella
-            r'📝',               # Emoji de notas
-        ]
-        
-        # Dividir el texto en párrafos
-        paragraphs = raw_response.split('\n\n')
-        formatted_text = []
-        
-        for paragraph in paragraphs:
-            paragraph = paragraph.strip()
-            if not paragraph:
-                continue
-                
-            # Verificar si el párrafo contiene consejos numerados o con viñetas
-            is_advice_list = any(re.search(pattern, paragraph) for pattern in advice_patterns)
-            
-            if is_advice_list:
-                # Mejorar el formato de listas
-                lines = paragraph.split('\n')
-                for line in lines:
-                    line = line.strip()
-                    if line:
-                        if re.match(r'(\d+[\.\)])', line):
-                            line = f"⭐ {line}"
-                        elif re.match(r'[•\-]', line):
-                            line = f"💡 {line[1:].strip() if line.startswith('•') or line.startswith('-') else line}"
-                        elif 'consejo' in line.lower() or 'recomendación' in line.lower() or 'sugerencia' in line.lower():
-                            line = f"📝 {line}"
-                        
-                        formatted_text.append(line)
-                formatted_text.append("")  # Línea en blanco entre secciones
-            else:
-                # Párrafos normales
-                formatted_text.append(paragraph)
-                formatted_text.append("")  # Línea en blanco entre párrafos
-        
-        # Unir todo y limpiar líneas en blanco excesivas
-        result = '\n'.join(formatted_text).strip()
-        result = re.sub(r'\n\s*\n\s*\n+', '\n\n', result)
-        
-        return result
     
     @cache_response(max_size=100, ttl=3600)
     @log_execution
@@ -277,69 +207,17 @@ Responde ahora de forma estructurada y profesional."""
             return self._get_fallback_response(text)
     
     def _determine_complexity(self, text: str, symptom: str = None) -> str:
-        """
-        Determina la complejidad del tema basado en el texto y síntoma
-        """
-        crisis_keywords = [
-            r'suicidio', r'autolesión', r'autoflagelo', r'matarme', 
-            r'no\s+quiero\s+vivir', r'acabar\s+con\s+todo', 
-            r'no\s+vale\s+la\s+pena', r'sin\s+esperanza', 
-            r'quiero\s+morir', r'terminar\s+con\s+todo',
-            r'me\s+quiero\s+morir', r'acabar\s+con\s+mi\s+vida',
-            r'no\s+puedo\s+más', r'estoy\s+harto(a)?', r'sin\s+sentido',
-            r'despedirme', r'adios', r'no\s+aguanto', r'cansado(a)?\s+de\s+vivir'
-        ]
-        
+        """Determina la complejidad del tema basado en el texto y síntoma."""
         text_lower = text.lower()
-        for pattern in crisis_keywords:
+        for pattern in CRISIS_PATTERNS:
             if re.search(pattern, text_lower):
                 return 'crisis'
-        
+
         complex_symptoms = ["Ansiedad", "Depresión", "Estrés", "Problemas familiares", "Problemas de pareja"]
         if len(text) > 150 or (symptom and symptom in complex_symptoms):
             return 'complejo'
-        
+
         return 'normal'
-    
-    def _get_system_prompt(self) -> str:
-        """
-        Retorna el prompt del sistema para apoyo psicológico
-        """
-        return """Eres un asistente psicológico profesional, empático y compasivo. Tu objetivo es:
-
-1. **Validar emociones**: Reconocer y validar los sentimientos del usuario
-2. **Ofrecer apoyo**: Proporcionar contención emocional inmediata  
-3. **Guiar sin diagnosticar**: Orientar sin hacer diagnósticos médicos
-4. **Fomentar autocuidado**: Sugerir técnicas de regulación emocional
-5. **Derivar cuando sea necesario**: Recomendar buscar ayuda profesional en casos graves
-
-**FORMATO DE RESPUESTA ESTRUCTURADO:**
-
-- **Empieza con validación emocional**: "Entiendo que..." "Es normal sentir..."
-- **Separa claramente las ideas** usando párrafos
-- **Para consejos prácticos**, usa formato de lista con:
-  • Viñetas (•) o números (1. 2. 3.)
-  • Emojis relevantes (💡, ⭐, 🌱, 🧘‍♀️, 📝)
-  • Títulos claros como "Consejos prácticos:" o "Estrategias que pueden ayudar:"
-- **Incluye preguntas reflexivas** al final para continuar la conversación
-- **Mantén un tono cálido, profesional y esperanzador**
-- **Evita lenguaje técnico excesivo**
-- **En crisis graves**, recomienda contactar líneas de ayuda profesional inmediatamente
-
-Ejemplo de formato ideal:
-
-Entiendo que estés pasando por un momento de [emoción]. Es completamente normal sentirse así cuando...
-
-💡 Algunas estrategias que pueden ayudarte:
-
-Practica la respiración profunda por 5 minutos
-
-Escribe tus pensamientos en un diario
-
-Da un corto paseo al aire libre
-
-¿Has probado alguna de estas técnicas? ¿Cómo te sientes al respecto?
-"""
     
     def _clean_response(self, response: str) -> str:
         """
@@ -385,12 +263,8 @@ Da un corto paseo al aire libre
         return cleaned
     
     def _get_fallback_response(self, text: str) -> str:
-        """
-        Retorna una respuesta de fallback en caso de error
-        """
         if self._determine_complexity(text) == 'crisis':
-            return "Crisis detectada\n\nVeo que estás pasando por un momento muy difícil. Es importante que hables con un profesional de inmediato.\n\nLíneas de ayuda inmediata:\nLínea de crisis: 911\nTu psicólogo de confianza\nServicios de emergencia local\n\nNo estás solo/a, busca ayuda profesional ahora."
-        
+            return CRISIS_RESPONSE
         return "Entiendo que estás pasando por un momento difícil. ¿Te gustaría contarme más sobre cómo te sientes?"
 
 class FallbackAIService(AIServiceStrategy):
@@ -419,10 +293,7 @@ class FallbackAIService(AIServiceStrategy):
     
     def select_model(self, text_length: int, complexity: str) -> str:
         return "fallback"
-    
-    def format_response(self, raw_response: str) -> str:
-        return raw_response
-    
+
     def generate_response(self, text: str, symptom: str = None) -> str:
         import random
         
@@ -436,31 +307,48 @@ class FallbackAIService(AIServiceStrategy):
 # ==================== FACTORY PATTERN ====================
 
 class AIServiceFactory:
-    """
-    Factory para crear instancias de servicios de IA
-    """
-    
+    """Factory para crear instancias de servicios de IA con soporte de singleton."""
+
+    _instance: Optional[AIServiceStrategy] = None
+    _lock = threading.Lock()
+
     @staticmethod
     def create_service(service_type: str = "groq", **kwargs) -> AIServiceStrategy:
-        """
-        Crea una instancia del servicio de IA especificado
-        """
         services = {
             "groq": GroqAIService,
             "fallback": FallbackAIService,
         }
-        
         if service_type not in services:
-            logger.warning(f"Servicio de IA '{service_type}' no encontrado, usando fallback")
+            logger.warning(f"Servicio '{service_type}' no encontrado, usando fallback")
             service_type = "fallback"
-        
-        service_class = services[service_type]
-        
         try:
-            return service_class(**kwargs)
+            return services[service_type](**kwargs)
         except Exception as e:
             logger.error(f"Error creando servicio {service_type}: {e}")
             return FallbackAIService()
+
+    @classmethod
+    def get_instance(cls) -> AIServiceStrategy:
+        """
+        Retorna la instancia singleton del servicio de IA.
+        Se inicializa una sola vez al primer acceso y se reutiliza en todos los requests.
+        """
+        if cls._instance is not None:
+            return cls._instance
+        with cls._lock:
+            if cls._instance is None:
+                groq_key = os.getenv('GROQ_API_KEY')
+                if groq_key:
+                    try:
+                        cls._instance = GroqAIService(api_key=groq_key)
+                        logger.info("Singleton AIService inicializado con Groq")
+                    except Exception as e:
+                        logger.error(f"Error inicializando Groq, usando fallback: {e}")
+                        cls._instance = FallbackAIService()
+                else:
+                    logger.warning("GROQ_API_KEY no configurada — usando FallbackAIService")
+                    cls._instance = FallbackAIService()
+        return cls._instance
 
 # ==================== USO EJEMPLO ====================
 

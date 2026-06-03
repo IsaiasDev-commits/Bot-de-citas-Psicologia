@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from collections import Counter
-from sqlalchemy import func, desc
+from sqlalchemy import desc
 from models import db, Patient, Appointment, Conversation, ClinicalNote, User
 
 
@@ -138,18 +138,23 @@ def get_symptom_stats() -> list:
 
 
 def get_monthly_appointments(months: int = 6) -> list:
+    """Agrupación mensual compatible con PostgreSQL y SQLite."""
     since = datetime.utcnow() - timedelta(days=30 * months)
-    rows = (
-        db.session.query(
-            func.date_trunc("month", Appointment.scheduled_at).label("month"),
-            func.count().label("count"),
-        )
+    appts = (
+        Appointment.query
+        .with_entities(Appointment.scheduled_at)
         .filter(Appointment.scheduled_at >= since, Appointment.status != "cancelled")
-        .group_by("month")
-        .order_by("month")
         .all()
     )
-    return [{"month": r.month.strftime("%b %Y"), "count": r.count} for r in rows]
+    counts: dict = {}
+    for (dt,) in appts:
+        key = dt.strftime("%Y-%m")
+        counts[key] = counts.get(key, 0) + 1
+
+    return [
+        {"month": datetime.strptime(k, "%Y-%m").strftime("%b %Y"), "count": v}
+        for k, v in sorted(counts.items())
+    ]
 
 
 def get_calendar_appointments(year: int, month: int) -> list:

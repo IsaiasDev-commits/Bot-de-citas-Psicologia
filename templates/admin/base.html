@@ -113,12 +113,15 @@
           <p class="text-white text-sm font-medium truncate">{{ current_user.name if current_user.is_authenticated else '' }}</p>
           <p class="text-slate-400 text-xs capitalize">{{ current_user.role if current_user.is_authenticated else '' }}</p>
         </div>
-        <a href="{{ url_for('admin.logout') }}" title="Cerrar sesión"
-           class="text-slate-400 hover:text-red-400 transition-colors">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-          </svg>
-        </a>
+        <form method="POST" action="{{ url_for('admin.logout') }}" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" title="Cerrar sesión"
+                  class="text-slate-400 hover:text-red-400 transition-colors bg-transparent border-0 cursor-pointer p-0">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+          </button>
+        </form>
       </div>
     </div>
   </aside>

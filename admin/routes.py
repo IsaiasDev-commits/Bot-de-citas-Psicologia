@@ -3,6 +3,7 @@ from flask_login import current_user
 from . import admin_bp
 from .decorators import login_required_admin
 from services import admin_service
+from constants import SINTOMAS_DISPONIBLES
 
 
 @admin_bp.route("/")
@@ -55,20 +56,11 @@ def appointments():
     stats = admin_service.get_dashboard_stats()
 
     from models.appointment import APPOINTMENT_STATUSES
-    SYMPTOMS = [
-        "Ansiedad","Tristeza","Estrés","Soledad","Miedo","Culpa","Inseguridad","Enojo",
-        "Agotamiento emocional","Falta de motivación","Problemas de sueño","Dolor corporal",
-        "Preocupación excesiva","Cambios de humor","Apatía","Sensación de vacío",
-        "Pensamientos negativos","Llanto frecuente","Dificultad para concentrarse",
-        "Desesperanza","Tensión muscular","Taquicardia","Dificultad para respirar",
-        "Problemas de alimentación","Pensamientos intrusivos","Problemas familiares",
-        "Problemas de pareja",
-    ]
 
     return render_template(
         "appointments/list.html",
         pagination=pagination, stats=stats,
-        APPOINTMENT_STATUSES=APPOINTMENT_STATUSES, SYMPTOMS=SYMPTOMS,
+        APPOINTMENT_STATUSES=APPOINTMENT_STATUSES, SYMPTOMS=SINTOMAS_DISPONIBLES,
         filters={"status": status, "symptom": symptom, "q": search,
                  "date_from": date_from, "date_to": date_to},
     )
