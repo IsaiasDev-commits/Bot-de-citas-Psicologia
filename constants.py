@@ -4,6 +4,12 @@ Constantes globales de la aplicación Equilibra.
 """
 
 import re as _re
+from datetime import datetime as _datetime, timezone as _timezone
+
+
+def utcnow() -> _datetime:
+    """Devuelve la hora actual en UTC como datetime naive. Reemplaza datetime.utcnow()."""
+    return _datetime.now(_timezone.utc).replace(tzinfo=None)
 
 # Patrones de detección de crisis (expresiones regulares)
 CRISIS_PATTERNS = [

@@ -11,7 +11,7 @@ from models import db as _db, Conversation as _ConvModel, Patient as _Patient
 from .ai_service import AIServiceFactory
 from .appointment_service import agendar_cita_completa as _agendar_cita_completa
 from .validation_service import ValidationService
-from constants import SINTOMAS_DISPONIBLES, detectar_crisis, CRISIS_RESPONSE
+from constants import SINTOMAS_DISPONIBLES, detectar_crisis, CRISIS_RESPONSE, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -375,7 +375,7 @@ class ConversationService:
                 conv = _ConvModel(
                     patient_id=patient.id if patient else None,
                     session_id=session.get("_id", ""),
-                    ended_at=datetime.utcnow(),
+                    ended_at=utcnow(),
                 )
                 conv.messages = interacciones
                 conv.detected_symptoms = symptoms

@@ -1,3 +1,4 @@
+from constants import utcnow
 from datetime import datetime
 from urllib.parse import urlparse, urljoin
 from flask import render_template, request, redirect, url_for, flash
@@ -34,7 +35,7 @@ def login():
         ).scalar_one_or_none()
 
         if user and user.is_active and user.check_password(password):
-            user.last_login = datetime.utcnow()
+            user.last_login = utcnow()
             db.session.commit()
             login_user(user, remember=remember)
             next_page = request.args.get("next")

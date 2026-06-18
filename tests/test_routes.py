@@ -98,6 +98,21 @@ class TestVerificarHorario:
         assert r.status_code == 400
 
 
+class TestPing:
+    def test_ping_200(self, client):
+        r = client.get("/ping")
+        assert r.status_code == 200
+
+    def test_ping_json(self, client):
+        r = client.get("/ping")
+        assert r.get_json() == {"ok": True}
+
+    def test_ping_rapido_sin_db(self, client):
+        """Verifica que /ping no depende de la DB."""
+        r = client.get("/ping")
+        assert r.status_code == 200
+
+
 class TestReset:
     def test_reset_get_no_permitido(self, client):
         r = client.get("/reset")

@@ -1,3 +1,4 @@
+from constants import utcnow
 import logging
 from datetime import datetime
 from dateutil import parser as dateutil_parser
@@ -14,7 +15,7 @@ def sync_from_calendar() -> dict:
         return {"ok": False, "error": "No hay servicio de calendario disponible"}
 
     try:
-        now_iso = datetime.utcnow().isoformat() + "Z"
+        now_iso = utcnow().isoformat() + "Z"
         result = (
             service.events()
             .list(

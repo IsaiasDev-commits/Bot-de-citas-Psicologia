@@ -1,3 +1,4 @@
+from constants import utcnow
 from datetime import datetime, timedelta
 from collections import Counter
 from sqlalchemy import desc
@@ -5,7 +6,7 @@ from models import db, Patient, Appointment, Conversation, ClinicalNote, User
 
 
 def get_dashboard_stats() -> dict:
-    today = datetime.utcnow().date()
+    today = utcnow().date()
     today_start = datetime.combine(today, datetime.min.time())
     today_end = today_start + timedelta(days=1)
     yesterday_start = today_start - timedelta(days=1)
@@ -45,7 +46,7 @@ def get_dashboard_stats() -> dict:
 
 
 def get_today_appointments() -> list:
-    today = datetime.utcnow().date()
+    today = utcnow().date()
     start = datetime.combine(today, datetime.min.time())
     end = start + timedelta(days=1)
 
@@ -59,7 +60,7 @@ def get_today_appointments() -> list:
 
 
 def get_recent_appointments(limit: int = 5) -> list:
-    since = datetime.utcnow() - timedelta(hours=24)
+    since = utcnow() - timedelta(hours=24)
     return (
         Appointment.query
         .filter(Appointment.created_at >= since)
@@ -139,7 +140,7 @@ def get_symptom_stats() -> list:
 
 def get_monthly_appointments(months: int = 6) -> list:
     """Agrupación mensual compatible con PostgreSQL y SQLite."""
-    since = datetime.utcnow() - timedelta(days=30 * months)
+    since = utcnow() - timedelta(days=30 * months)
     appts = (
         Appointment.query
         .with_entities(Appointment.scheduled_at)
@@ -179,7 +180,7 @@ def find_or_create_patient(name: str, phone: str, email: str = None, symptom: st
         patient = Patient(name=name, phone=phone, email=email)
         db.session.add(patient)
 
-    patient.last_contact = datetime.utcnow()
+    patient.last_contact = utcnow()
     patient.total_sessions = (patient.total_sessions or 0) + 1
     if symptom:
         patient.add_symptom(symptom)

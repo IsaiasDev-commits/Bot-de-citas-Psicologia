@@ -1,9 +1,12 @@
+import calendar as _cal
+from datetime import datetime
 from flask import render_template, redirect, url_for, request
 from flask_login import current_user
 from . import admin_bp
 from .decorators import login_required_admin
 from services import admin_service
-from constants import SINTOMAS_DISPONIBLES
+from constants import SINTOMAS_DISPONIBLES, utcnow
+from models.appointment import APPOINTMENT_STATUSES
 
 
 @admin_bp.route("/")
@@ -55,8 +58,6 @@ def appointments():
     )
     stats = admin_service.get_dashboard_stats()
 
-    from models.appointment import APPOINTMENT_STATUSES
-
     return render_template(
         "appointments/list.html",
         pagination=pagination, stats=stats,
@@ -69,16 +70,13 @@ def appointments():
 @admin_bp.route("/appointments/calendar")
 @login_required_admin
 def calendar_view():
-    from datetime import datetime
-    year = request.args.get("year", datetime.utcnow().year, type=int)
-    month = request.args.get("month", datetime.utcnow().month, type=int)
+    year = request.args.get("year", utcnow().year, type=int)
+    month = request.args.get("month", utcnow().month, type=int)
 
     appts = admin_service.get_calendar_appointments(year, month)
     stats = admin_service.get_dashboard_stats()
 
-    # Build calendar grid data
-    import calendar as cal
-    cal_obj = cal.Calendar(firstweekday=0)
+    cal_obj = _cal.Calendar(firstweekday=0)
     weeks = cal_obj.monthdatescalendar(year, month)
 
     appt_by_day = {}
@@ -91,7 +89,7 @@ def calendar_view():
     next_month = month + 1 if month < 12 else 1
     next_year = year if month < 12 else year + 1
 
-    month_name = cal.month_name[month]
+    month_name = _cal.month_name[month]
 
     return render_template(
         "appointments/calendar.html",
@@ -99,7 +97,7 @@ def calendar_view():
         year=year, month=month, month_name=month_name,
         prev_year=prev_year, prev_month=prev_month,
         next_year=next_year, next_month=next_month,
-        current_date=datetime.utcnow().date(),
+        current_date=utcnow().date(),
     )
 
 

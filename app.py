@@ -31,6 +31,7 @@ if _sentry_dsn:
     )
 
 from services.validation_service import ValidationService
+from services.admin_service import find_or_create_patient
 from constants import SINTOMAS_DISPONIBLES
 from services.conversation_service import ConversationService
 from services.appointment_service import (
@@ -52,7 +53,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-from models import db, User
+from models import db, User, Appointment as AppointmentModel
 from flask_migrate import Migrate
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -345,8 +346,6 @@ def agendar_cita():
 
         # Guardar cita y paciente en la base de datos
         try:
-            from services.admin_service import find_or_create_patient
-            from models import Appointment as AppointmentModel
             patient_name = data.get("nombre", "Paciente")
             patient = find_or_create_patient(
                 name=patient_name, phone=telefono, symptom=sintoma
@@ -401,6 +400,12 @@ def agendar_cita():
     except Exception as e:
         app.logger.error(f"Error al agendar cita: {e}")
         return jsonify({"error": "Error al procesar la cita"}), 500
+
+@app.route('/ping')
+def ping():
+    """Liveness probe ligero — sin I/O, para load balancers y monitores de uptime."""
+    return jsonify({"ok": True}), 200
+
 
 @app.route('/health')
 def health_check():
