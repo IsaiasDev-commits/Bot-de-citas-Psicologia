@@ -1,0 +1,65 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://equilibra:equilibra@db:5432/equilibra
+      REDIS_URL: redis://redis:6379/0
+      FLASK_ENV: development
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    restart: on-failure
+
+  worker:
+    build: .
+    command: >
+      celery -A tasks.celery_app worker
+      --loglevel=info
+      --concurrency=2
+      --queues=celery
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://equilibra:equilibra@db:5432/equilibra
+      REDIS_URL: redis://redis:6379/0
+      FLASK_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: on-failure
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: equilibra
+      POSTGRES_PASSWORD: equilibra
+      POSTGRES_DB: equilibra
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U equilibra"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

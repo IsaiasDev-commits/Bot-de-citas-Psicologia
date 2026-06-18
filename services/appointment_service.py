@@ -281,23 +281,28 @@ def enviar_correo_resend(destinatario: str, fecha: str, hora: str, telefono: str
         return False
 
 def enviar_correo_confirmacion(destinatario: str, fecha: str, hora: str, telefono: str, sintoma: str) -> bool:
-    """Versión para Resend que funciona en Render"""
+    """
+    Envía email de confirmación.
+    - Si REDIS_URL y RESEND_API_KEY están configurados: encola la tarea en Celery (async).
+    - Si solo RESEND_API_KEY: envía de forma síncrona vía Resend.
+    - Sin credenciales: solo loggea (modo desarrollo).
+    """
     destinatario = "chatbotequilibra@gmail.com"
-    try:
-        resend_api_key = os.getenv('RESEND_API_KEY')
-        
-        if resend_api_key:
-            # Usar Resend API
-            return enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma)
-        else:
-            # Fallback: solo loggear 
-            logger.info(f"📧 Simulando envío de email a {destinatario}")
-            logger.info(f"   Cita: {fecha} {hora} - Tel: {telefono} - Síntoma: {sintoma}")
+
+    if os.getenv('REDIS_URL') and os.getenv('RESEND_API_KEY'):
+        try:
+            from tasks import send_confirmation_email
+            send_confirmation_email.delay(destinatario, fecha, hora, telefono, sintoma)
+            logger.info(f"📧 Email encolado via Celery: {fecha} {hora}")
             return True
-            
-    except Exception as e:
-        logger.warning(f"⚠️ Email no enviado (pero no crítico): {e}")
-        return True
+        except Exception as e:
+            logger.warning(f"⚠️ Celery no disponible, enviando sync: {e}")
+
+    if os.getenv('RESEND_API_KEY'):
+        return enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma)
+
+    logger.info(f"📧 Email simulado (sin RESEND_API_KEY): {fecha} {hora} → {destinatario}")
+    return True
 
 # ==================== AGENDAMIENTO COMPLETO ====================
 

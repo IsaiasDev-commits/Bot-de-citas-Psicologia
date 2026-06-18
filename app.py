@@ -112,11 +112,13 @@ if 'RENDER' in os.environ:
 
 csrf = CSRFProtect(app)
 
+_limiter_storage = os.getenv('REDIS_URL', 'memory://')
+
 limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["2000 per day", "500 per hour"],
-    storage_uri="memory://",
+    storage_uri=_limiter_storage,
     strategy="fixed-window"
 )
 

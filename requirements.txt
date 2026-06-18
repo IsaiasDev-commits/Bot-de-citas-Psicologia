@@ -21,3 +21,4 @@ Flask-Migrate==4.0.7
 psycopg2-binary==2.9.9
 sentry-sdk[flask]==2.8.0
 pytest==8.3.4
+celery[redis]==5.3.6

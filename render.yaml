@@ -1,0 +1,66 @@
+services:
+  - type: web
+    name: equilibra-web
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: flask --app manage db upgrade && gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 120 --access-logfile - app:app
+    healthCheckPath: /health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        fromDatabase:
+          name: equilibra-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: equilibra-redis
+          type: redis
+          property: connectionString
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: GOOGLE_CREDENTIALS
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+
+  - type: worker
+    name: equilibra-worker
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        fromDatabase:
+          name: equilibra-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: equilibra-redis
+          type: redis
+          property: connectionString
+      - key: RESEND_API_KEY
+        sync: false
+      - key: GOOGLE_CREDENTIALS
+        sync: false
+
+databases:
+  - name: equilibra-db
+    databaseName: equilibra
+    user: equilibra
+    plan: free
+
+redis:
+  - name: equilibra-redis
+    plan: free
+    maxmemoryPolicy: noeviction
