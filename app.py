@@ -1,20 +1,20 @@
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify, make_response
-from datetime import datetime, timedelta
 import os
-import json
-import re
 import logging
 import sys
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
+
 from dotenv import load_dotenv
+
+# Cargar .env antes de cualquier os.getenv() — crítico para Sentry y otros servicios
+load_dotenv()
+
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, make_response
 from googleapiclient.errors import HttpError
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
 from flask_login import LoginManager
-import threading
-import time
-import html
 from dateutil import parser
 
 import sentry_sdk
@@ -43,9 +43,6 @@ from services.appointment_service import (
     get_calendar_service,
     parsear_fecha_google
 )
-
-# Cargar variables de entorno desde .env
-load_dotenv()
 
 app = Flask(__name__)
 
@@ -112,7 +109,24 @@ if 'RENDER' in os.environ:
 
 csrf = CSRFProtect(app)
 
-_limiter_storage = os.getenv('REDIS_URL', 'memory://')
+# Sesiones server-side cuando Redis está disponible (evita límite 4 KB de cookie)
+_redis_url = os.getenv('REDIS_URL')
+if _redis_url:
+    from flask_session import Session
+    import redis as _redis_lib
+    app.config.update(
+        SESSION_TYPE='redis',
+        SESSION_REDIS=_redis_lib.from_url(_redis_url),
+        SESSION_USE_SIGNER=True,
+        SESSION_PERMANENT=False,
+        SESSION_KEY_PREFIX='equilibra:session:',
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+        SESSION_COOKIE_SECURE=os.environ.get('FLASK_ENV') == 'production',
+    )
+    Session(app)
+
+_limiter_storage = _redis_url or 'memory://'
 
 limiter = Limiter(
     get_remote_address,

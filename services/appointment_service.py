@@ -19,6 +19,9 @@ import resend
 
 logger = logging.getLogger(__name__)
 
+# Email de notificación al psicólogo — configurable desde PSICOLOGO_EMAIL
+_NOTIFICATION_EMAIL = os.getenv('PSICOLOGO_EMAIL', 'chatbotequilibra@gmail.com')
+
 # Importar servicios compartidos
 from .validation_service import ValidationService
 
@@ -228,7 +231,7 @@ def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
 
 def enviar_correo_resend(destinatario: str, fecha: str, hora: str, telefono: str, sintoma: str) -> bool:
     """Usar Resend API para enviar emails"""
-    destinatario = "chatbotequilibra@gmail.com"
+    destinatario = _NOTIFICATION_EMAIL
     try:
         resend_api_key = os.getenv('RESEND_API_KEY')
         
@@ -287,7 +290,7 @@ def enviar_correo_confirmacion(destinatario: str, fecha: str, hora: str, telefon
     - Si solo RESEND_API_KEY: envía de forma síncrona vía Resend.
     - Sin credenciales: solo loggea (modo desarrollo).
     """
-    destinatario = "chatbotequilibra@gmail.com"
+    destinatario = _NOTIFICATION_EMAIL
 
     if os.getenv('REDIS_URL') and os.getenv('RESEND_API_KEY'):
         try:
