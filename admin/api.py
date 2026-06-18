@@ -6,13 +6,14 @@ from services.calendar_sync_service import update_calendar_event_status, sync_fr
 from .decorators import login_required_admin, admin_required
 from . import admin_bp
 
+
 _MAX_NOTE_LENGTH = 10_000  # caracteres máximos para notas clínicas
 
 
 @admin_bp.route("/api/appointments/<int:appt_id>/status", methods=["PATCH"])
 @login_required_admin
 def update_appointment_status(appt_id):
-    appt = Appointment.query.get_or_404(appt_id)
+    appt = db.get_or_404(Appointment, appt_id)
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
 
@@ -36,7 +37,7 @@ def update_appointment_status(appt_id):
 @admin_bp.route("/api/patients/<int:patient_id>/notes", methods=["POST"])
 @login_required_admin
 def add_clinical_note(patient_id):
-    Patient.query.get_or_404(patient_id)
+    db.get_or_404(Patient, patient_id)
     data = request.get_json(silent=True) or {}
     content = (data.get("content") or "").strip()
 
@@ -111,7 +112,7 @@ def check_new_appointments():
 @admin_bp.route("/api/appointments/<int:appt_id>/notes", methods=["PATCH"])
 @login_required_admin
 def update_appointment_notes(appt_id):
-    appt = Appointment.query.get_or_404(appt_id)
+    appt = db.get_or_404(Appointment, appt_id)
     data = request.get_json(silent=True) or {}
     notes = (data.get("notes") or "").strip()
     if len(notes) > _MAX_NOTE_LENGTH:

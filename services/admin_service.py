@@ -103,7 +103,7 @@ def get_patients_paginated(page: int, per_page: int, search: str = None) -> obje
 
 
 def get_patient_detail(patient_id: int) -> dict:
-    patient = Patient.query.get_or_404(patient_id)
+    patient = db.get_or_404(Patient, patient_id)
     appointments = (
         Appointment.query.filter_by(patient_id=patient_id)
         .order_by(desc(Appointment.scheduled_at))

@@ -261,38 +261,3 @@ class ValidationService:
         
         return True, ""
 
-# ==================== USO EJEMPLO ====================
-
-if __name__ == "__main__":
-    # Configurar logging
-    logging.basicConfig(level=logging.INFO)
-    
-    # Crear servicio de validación
-    validation_service = ValidationService()
-    
-    # Probar validación de horario
-    test_cases = [
-        ("2025-01-01", "14:00"),  # Lunes laboral
-        ("2025-01-01", "20:00"),  # Fuera de horario
-        ("2025-01-04", "10:00"),  # Sábado válido
-        ("2025-01-05", "10:00"),  # Domingo inválido
-    ]
-    
-    for date, time in test_cases:
-        is_valid, message = validation_service.validate_appointment_time(date, time)
-        status = "✅ VÁLIDO" if is_valid else "❌ INVÁLIDO"
-        print(f"{date} {time}: {status} - {message}")
-    
-    # Probar obtención de horarios disponibles
-    print("\n📅 Horarios disponibles para 2025-01-01 (Lunes):")
-    available_slots = validation_service.get_available_time_slots("2025-01-01")
-    for slot in available_slots:
-        print(f"  • {slot['hora']} - {slot['mensaje']}")
-    
-    # Probar validación de teléfono
-    phone_tests = ["0991234567", "0912345678", "1234567890", "099-123-4567"]
-    print("\n📱 Validación de teléfonos:")
-    for phone in phone_tests:
-        is_valid, message = validation_service.validate_phone(phone)
-        status = "✅ VÁLIDO" if is_valid else "❌ INVÁLIDO"
-        print(f"  {phone}: {status} - {message}")
