@@ -7,7 +7,9 @@ from datetime import datetime, timedelta
 import logging
 from typing import Dict, Any, Optional, Tuple
 from flask import session, request
+from models import db as _db, Conversation as _ConvModel, Patient as _Patient
 from .ai_service import AIServiceFactory
+from .appointment_service import agendar_cita_completa as _agendar_cita_completa
 from .validation_service import ValidationService
 from constants import SINTOMAS_DISPONIBLES, detectar_crisis, CRISIS_RESPONSE
 
@@ -81,11 +83,14 @@ class EvaluationState(ConversationState):
         return True, None
 
 
+_MAX_USER_INPUT = 2000  # caracteres máximos por mensaje de usuario
+
+
 class DeepeningState(ConversationState):
     """Estado de profundización - conversación normal"""
-    
+
     def handle_request(self, request_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
-        user_input = request_data.get('user_input', '').strip()
+        user_input = request_data.get('user_input', '').strip()[:_MAX_USER_INPUT]
         solicitar_cita = request_data.get('solicitar_cita')
         
         # Si el usuario presiona explícitamente el botón de solicitar cita
@@ -277,15 +282,13 @@ class ConversationService:
 
         try:
             if self.ai_service:
-                logger.info("🔥 LLAMANDO A GROQ API REALMENTE 🔥")
-                prompt = f"""
-                El usuario está experimentando: {sintoma}.
-                Último mensaje del usuario: "{user_input}"
-
-                Responde de manera empática, profesional y estructurada.
-                """
+                prompt = (
+                    f"El usuario está experimentando: {sintoma}.\n"
+                    f'Último mensaje del usuario: "{user_input}"\n\n'
+                    "Responde de manera empática, profesional y estructurada."
+                )
                 response = self.ai_service.generate_response(prompt, sintoma)
-                logger.info("🎯 RESPUESTA REAL RECIBIDA DE GROQ")
+                logger.debug("Respuesta Groq recibida correctamente")
                 return response
         except Exception as e:
             logger.error(f"Error usando Groq: {e}")
@@ -303,46 +306,55 @@ class ConversationService:
             return 0
     
     def schedule_appointment(self, fecha: str, hora: str, telefono: str) -> Tuple[bool, str]:
-        """Agenda una cita usando la lógica real del appointment_service"""
+        """Agenda una cita: Calendar + email + persistencia en DB."""
         try:
-            # Importar el servicio de agendamiento
-            from .appointment_service import agendar_cita_completa
-            
-            # Obtener síntoma actual de la sesión
             sintoma = session.get("sintoma_actual", "Consulta psicológica")
-            
-            # Usar la función completa de agendamiento
-            success, message, evento_url = agendar_cita_completa(fecha, hora, telefono, sintoma)
-            
-            if success:
-                # Crear mensajes de confirmación (coherentes con app.py)
-                mensaje_confirmacion = (
-                    f"✅ **Cita confirmada**\n\n"
-                    f"📅 **Fecha:** {fecha}\n"
-                    f"⏰ **Hora:** {hora}\n"
-                    f"📱 **Teléfono:** {telefono}\n\n"
-                    f"Tu cita ha sido registrada correctamente."
-                )
-                
-                mensaje_cierre = (
-                    f"💚 **Gracias por agendar con Equilibra**\n\n"
-                    f"Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
-                    f"Gracias por confiar en este espacio."
-                )
-                
-                # Agregar ambos mensajes al historial
-                self.add_bot_interaction(mensaje_confirmacion, None)
-                self.add_bot_interaction(mensaje_cierre, None)
-                
-                logger.info(f"Cita agendada exitosamente: {fecha} {hora} para {telefono}")
-                return True, "Cita agendada exitosamente"
-            else:
+            success, message, calendar_event_id = _agendar_cita_completa(
+                fecha, hora, telefono, sintoma
+            )
+
+            if not success:
                 logger.error(f"Error al agendar cita: {message}")
                 return False, message
-            
-        except ImportError as e:
-            logger.error(f"Error importando appointment_service: {e}")
-            return False, "Error interno del sistema"
+
+            # Persistir en la base de datos
+            try:
+                from services.admin_service import find_or_create_patient
+                from models import Appointment as _Appointment
+                patient = find_or_create_patient(
+                    name="Paciente", phone=telefono, symptom=sintoma
+                )
+                scheduled_dt = datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
+                appt = _Appointment(
+                    patient_id=patient.id,
+                    scheduled_at=scheduled_dt,
+                    symptom=sintoma,
+                    status="pending",
+                    calendar_event_id=calendar_event_id,
+                )
+                _db.session.add(appt)
+                _db.session.commit()
+                logger.info(f"Cita guardada en DB: id={appt.id} {fecha} {hora}")
+            except Exception as db_err:
+                logger.warning(f"Cita creada en Calendar pero no en DB: {db_err}")
+
+            self.add_bot_interaction(
+                f"✅ **Cita confirmada**\n\n"
+                f"📅 **Fecha:** {fecha}\n"
+                f"⏰ **Hora:** {hora}\n"
+                f"📱 **Teléfono:** {telefono}\n\n"
+                f"Tu cita ha sido registrada correctamente.",
+                None,
+            )
+            self.add_bot_interaction(
+                "💚 **Gracias por agendar con Equilibra**\n\n"
+                "Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
+                "Gracias por confiar en este espacio.",
+                None,
+            )
+            logger.info(f"Cita agendada exitosamente: {fecha} {hora} para {telefono}")
+            return True, "Cita agendada exitosamente"
+
         except Exception as e:
             logger.error(f"Error al agendar cita: {e}")
             return False, str(e)
@@ -352,18 +364,15 @@ class ConversationService:
         Guarda la conversación activa en DB y reinicia la sesión a estado inicial.
         Llama a esto antes de session.clear() para no perder el historial.
         """
-        from models import db as _db
-        from models import Conversation as ConvModel, Patient
-
         conv_data = session.get("conversacion_data", {})
         interacciones = conv_data.get("interacciones", [])
         telefono = session.get("telefono_cita")
 
         if interacciones:
             try:
-                patient = Patient.query.filter_by(phone=telefono).first() if telefono else None
+                patient = _Patient.query.filter_by(phone=telefono).first() if telefono else None
                 symptoms = list({i.get("sintoma") for i in interacciones if i.get("sintoma")})
-                conv = ConvModel(
+                conv = _ConvModel(
                     patient_id=patient.id if patient else None,
                     session_id=session.get("_id", ""),
                     ended_at=datetime.utcnow(),

@@ -136,31 +136,18 @@ limiter = Limiter(
     strategy="fixed-window"
 )
 
-# Configuración de logging mejorada para Render
-if not os.path.exists('logs'):
-    os.makedirs('logs')
+os.makedirs('logs', exist_ok=True)
 
-handler = RotatingFileHandler('logs/app.log', maxBytes=10000, backupCount=3)
+handler = RotatingFileHandler('logs/app.log', maxBytes=10 * 1024 * 1024, backupCount=5)
 handler.setLevel(logging.INFO)
 app.logger.addHandler(handler)
 
-# También mostrar logs en consola para Render
 console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setLevel(logging.INFO)
 app.logger.addHandler(console_handler)
 
 logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
-
-if os.environ.get('FLASK_ENV') != 'production':
-    app.logger.debug(f"Python version: {sys.version}")
-    app.logger.debug(f"Current directory: {os.getcwd()}")
-    app.logger.debug(f"Files in directory: {os.listdir('.')}")
-
-# Crear directorios necesarios
-for directory in ["conversaciones", "datos", "logs", "services"]:
-    if not os.path.exists(directory):
-        os.makedirs(directory)
 
 # ==================== SERVICIOS ====================
 
