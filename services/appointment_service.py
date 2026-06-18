@@ -7,6 +7,7 @@ import json
 import logging
 import time
 import threading
+import html as _html
 from datetime import datetime
 from typing import Tuple, Dict, Any, Optional
 from google.oauth2 import service_account
@@ -238,23 +239,28 @@ def enviar_correo_resend(destinatario: str, fecha: str, hora: str, telefono: str
         # Configurar la API key de Resend
         resend.api_key = resend_api_key
         
+        fecha_esc = _html.escape(fecha)
+        hora_esc = _html.escape(hora)
+        tel_esc = _html.escape(telefono)
+        sintoma_esc = _html.escape(sintoma)
+
         mensaje = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #4CAF82; text-align: center;">📅 NUEVA CITA AGENDADA - EQUILIBRA</h2>
-            
+            <h2 style="color: #4CAF82; text-align: center;">&#128197; NUEVA CITA AGENDADA - EQUILIBRA</h2>
+
             <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
-                <p><strong>Fecha:</strong> {fecha}</p>
-                <p><strong>Hora:</strong> {hora}</p>
-                <p><strong>Teléfono:</strong> {telefono}</p>
-                <p><strong>Síntoma principal:</strong> {sintoma}</p>
+                <p><strong>Fecha:</strong> {fecha_esc}</p>
+                <p><strong>Hora:</strong> {hora_esc}</p>
+                <p><strong>Tel&eacute;fono:</strong> {tel_esc}</p>
+                <p><strong>S&iacute;ntoma principal:</strong> {sintoma_esc}</p>
             </div>
-            
+
             <p>La cita ha sido registrada exitosamente en el calendario de Google.</p>
             <p>Por favor contacta al paciente para confirmar los detalles.</p>
-            
+
             <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #4CAF82;">
                 <p>Saludos,<br>
-                <strong>Equilibra</strong> - Sistema de Citas Psicológicas</p>
+                <strong>Equilibra</strong> - Sistema de Citas Psicol&oacute;gicas</p>
             </div>
         </div>
         """

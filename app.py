@@ -17,6 +17,19 @@ import time
 import html
 from dateutil import parser
 
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
+
+_sentry_dsn = os.getenv('SENTRY_DSN')
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=0.05,
+        environment=os.getenv('FLASK_ENV', 'development'),
+        send_default_pii=False,
+    )
+
 from services.validation_service import ValidationService
 from constants import SINTOMAS_DISPONIBLES
 from services.conversation_service import ConversationService
@@ -93,10 +106,9 @@ if os.environ.get('FLASK_ENV') == 'production':
 else:
     app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
 
-# Configuración específica para Render
+# Usar HTTPS para url_for() en Render
 if 'RENDER' in os.environ:
     app.config['PREFERRED_URL_SCHEME'] = 'https'
-    app.config['SERVER_NAME'] = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 
 csrf = CSRFProtect(app)
 
@@ -104,14 +116,6 @@ limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["2000 per day", "500 per hour"],
-    storage_uri="memory://",
-    strategy="fixed-window"
-)
-
-cita_limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["100 per hour", "30 per minute"],
     storage_uri="memory://",
     strategy="fixed-window"
 )
@@ -196,10 +200,10 @@ def cancelar_cita():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/verificar-horario", methods=["POST"])
-@cita_limiter.limit("60 per minute")
+@limiter.limit("60 per minute")
 def verificar_horario():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data or 'fecha' not in data or 'hora' not in data:
             return jsonify({"error": "Datos incompletos"}), 400
         
@@ -280,11 +284,11 @@ def verificar_horario():
         return jsonify({"error": "Error interno del servidor"}), 500
 
 @app.route("/obtener-horarios-disponibles", methods=["POST"])
-@cita_limiter.limit("60 per minute")
+@limiter.limit("60 per minute")
 def obtener_horarios_disponibles():
     """Endpoint para obtener horarios disponibles con validaciones estrictas"""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data or 'fecha' not in data:
             return jsonify({"error": "Fecha requerida"}), 400
         
@@ -305,13 +309,13 @@ def obtener_horarios_disponibles():
         return jsonify({"error": "Error interno del servidor"}), 500
 
 @app.route("/agendar-cita", methods=["POST"])
-@cita_limiter.limit("40 per minute")
+@limiter.limit("40 per minute")
 def agendar_cita():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             return jsonify({"error": "Datos incompletos"}), 400
-            
+
         required_fields = ["fecha", "hora", "telefono", "sintoma"]
         for field in required_fields:
             if field not in data or not data[field]:
@@ -475,6 +479,16 @@ def set_security_headers(response):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    # CSP: permite inline scripts/styles (requerido por Tailwind CDN y window.__CSRF_TOKEN__)
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none';"
+    )
     if os.environ.get("FLASK_ENV") == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
