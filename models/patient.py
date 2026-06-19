@@ -1,5 +1,5 @@
-from datetime import datetime
 import json
+from constants import utcnow
 from . import db
 
 
@@ -14,8 +14,8 @@ class Patient(db.Model):
     name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20), unique=True, nullable=False)
     email = db.Column(db.String(150), nullable=True)
-    first_contact = db.Column(db.DateTime, default=datetime.utcnow)
-    last_contact = db.Column(db.DateTime, default=datetime.utcnow)
+    first_contact = db.Column(db.DateTime, default=utcnow)
+    last_contact = db.Column(db.DateTime, default=utcnow)
     total_sessions = db.Column(db.Integer, default=0)
     _symptoms_history = db.Column("symptoms_history", db.Text, default="[]")
 
