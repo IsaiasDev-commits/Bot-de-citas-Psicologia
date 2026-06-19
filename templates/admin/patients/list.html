@@ -123,7 +123,7 @@
     <div class="flex gap-1">
       {% if pagination.has_prev %}
       <a href="{{ url_for('admin.patients', page=pagination.prev_num, q=search) }}"
-         class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">← Anterior</a>
+         class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">Anterior</a>
       {% endif %}
       {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
         {% if p %}
@@ -138,7 +138,7 @@
       {% endfor %}
       {% if pagination.has_next %}
       <a href="{{ url_for('admin.patients', page=pagination.next_num, q=search) }}"
-         class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">Siguiente →</a>
+         class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600 transition-colors">Siguiente</a>
       {% endif %}
     </div>
   </div>
