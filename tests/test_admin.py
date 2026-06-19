@@ -26,11 +26,41 @@ def admin_user(db, app):
 
 
 @pytest.fixture()
+def psychologist_user(db, app):
+    """Crea un usuario psicólogo (no admin) en la DB de test."""
+    from models import User
+    with app.app_context():
+        u = User(
+            name="Test Psico",
+            email="psico@equilibra.com",
+            is_active=True,
+            role="psychologist",
+        )
+        u.set_password("PsicoPass123!")
+        db.session.add(u)
+        db.session.commit()
+        yield u
+        db.session.delete(u)
+        db.session.commit()
+
+
+@pytest.fixture()
 def auth_client(client, admin_user):
     """Cliente HTTP ya autenticado como admin."""
     client.post(
         "/admin/login",
         data={"email": admin_user.email, "password": "TestPass123!"},
+        follow_redirects=True,
+    )
+    return client
+
+
+@pytest.fixture()
+def psico_client(client, psychologist_user):
+    """Cliente HTTP autenticado como psicólogo (no admin)."""
+    client.post(
+        "/admin/login",
+        data={"email": psychologist_user.email, "password": "PsicoPass123!"},
         follow_redirects=True,
     )
     return client
@@ -292,3 +322,31 @@ class TestClinicalNotesAPI:
             content_type="application/json",
         )
         assert r.status_code in (301, 302, 401, 403)
+
+
+# ── admin_required (role=admin) ───────────────────────────────────────────────
+
+class TestAdminRequiredDecorator:
+    """El decorador admin_required permite admins y bloquea psicólogos."""
+
+    def test_psico_puede_acceder_rutas_normales(self, psico_client):
+        """login_required_admin: psicólogo puede ver dashboard."""
+        r = psico_client.get("/admin/dashboard")
+        assert r.status_code == 200
+
+    def test_psico_bloqueado_en_calendar_sync(self, psico_client):
+        """admin_required: psicólogo es redirigido a dashboard, no puede forzar sync."""
+        r = psico_client.post(
+            "/admin/api/calendar/sync",
+            content_type="application/json",
+            follow_redirects=False,
+        )
+        assert r.status_code in (301, 302)
+
+    def test_admin_puede_acceder_calendar_sync(self, auth_client):
+        """admin_required: admin puede llamar a calendar sync (devuelve JSON)."""
+        r = auth_client.post(
+            "/admin/api/calendar/sync",
+            content_type="application/json",
+        )
+        assert r.content_type.startswith("application/json")

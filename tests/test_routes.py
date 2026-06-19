@@ -3,6 +3,16 @@ import json
 import pytest
 
 
+class TestIndexPage:
+    def test_get_retorna_200(self, client):
+        r = client.get("/")
+        assert r.status_code == 200
+
+    def test_contiene_html(self, client):
+        r = client.get("/")
+        assert b"<html" in r.data.lower() or b"<!doctype" in r.data.lower()
+
+
 class TestHealthCheck:
     def test_health_retorna_200_o_503(self, client):
         r = client.get("/health")

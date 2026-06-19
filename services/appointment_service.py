@@ -231,7 +231,6 @@ def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
 
 def enviar_correo_resend(destinatario: str, fecha: str, hora: str, telefono: str, sintoma: str) -> bool:
     """Usar Resend API para enviar emails"""
-    destinatario = _NOTIFICATION_EMAIL
     try:
         resend_api_key = os.getenv('RESEND_API_KEY')
         
@@ -272,15 +271,15 @@ def enviar_correo_resend(destinatario: str, fecha: str, hora: str, telefono: str
         respuesta = resend.Emails.send({
             "from": "Equilibra <onboarding@resend.dev>",
             "to": destinatario,
-            "subject": f"✅ Nueva cita agendada - {fecha} {hora}",
+            "subject": f"Nueva cita agendada - {fecha} {hora}",
             "html": mensaje
         })
 
-        logger.info(f"✅ Correo enviado correctamente via Resend: {respuesta}")
+        logger.info(f"Correo enviado correctamente via Resend: {respuesta}")
         return True
-            
+
     except Exception as e:
-        logger.error(f"❌ Error enviando correo con Resend: {e}")
+        logger.error(f"Error enviando correo con Resend: {e}")
         return False
 
 def enviar_correo_confirmacion(destinatario: str, fecha: str, hora: str, telefono: str, sintoma: str) -> bool:
@@ -290,21 +289,20 @@ def enviar_correo_confirmacion(destinatario: str, fecha: str, hora: str, telefon
     - Si solo RESEND_API_KEY: envía de forma síncrona vía Resend.
     - Sin credenciales: solo loggea (modo desarrollo).
     """
-    destinatario = _NOTIFICATION_EMAIL
 
     if os.getenv('REDIS_URL') and os.getenv('RESEND_API_KEY'):
         try:
             from tasks import send_confirmation_email
             send_confirmation_email.delay(destinatario, fecha, hora, telefono, sintoma)
-            logger.info(f"📧 Email encolado via Celery: {fecha} {hora}")
+            logger.info(f"Email encolado via Celery: {fecha} {hora}")
             return True
         except Exception as e:
-            logger.warning(f"⚠️ Celery no disponible, enviando sync: {e}")
+            logger.warning(f"Celery no disponible, enviando sync: {e}")
 
     if os.getenv('RESEND_API_KEY'):
         return enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma)
 
-    logger.info(f"📧 Email simulado (sin RESEND_API_KEY): {fecha} {hora} → {destinatario}")
+    logger.info(f"Email simulado (sin RESEND_API_KEY): {fecha} {hora} -> {destinatario}")
     return True
 
 # ==================== AGENDAMIENTO COMPLETO ====================
@@ -346,7 +344,7 @@ def agendar_cita_completa(fecha: str, hora: str, telefono: str, sintoma: str) ->
 
         # 5. Enviar correo de confirmación (no bloqueante)
         email_enviado = enviar_correo_confirmacion(
-            "chatbotequilibra@gmail.com", fecha, hora, telefono, sintoma
+            _NOTIFICATION_EMAIL, fecha, hora, telefono, sintoma
         )
         if not email_enviado:
             logger.warning("Email no enviado (cita creada en calendario)")
