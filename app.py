@@ -84,11 +84,15 @@ if os.environ.get('FLASK_ENV') != 'production':
     with app.app_context():
         try:
             db.create_all()
-        except Exception:
-            pass
+        except Exception as _e:
+            app.logger.warning(f"db.create_all() failed (migrations may not be applied): {_e}")
 
 # Configuración desde variables de entorno
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "clave_por_defecto_para_desarrollo")
+_default_secret = "clave_por_defecto_para_desarrollo"
+_secret_key = os.getenv("FLASK_SECRET_KEY", _default_secret)
+if _secret_key == _default_secret and os.getenv("FLASK_ENV") == "production":
+    raise RuntimeError("FLASK_SECRET_KEY must be set to a strong random value in production")
+app.secret_key = _secret_key
 
 app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024  
 
