@@ -122,7 +122,7 @@ def _extract_patient_name(summary: str) -> str:
     parts = (summary or "").split("-")
     if len(parts) >= 2:
         return parts[-1].strip()
-    return summary.strip()
+    return (summary or "").strip()
 
 
 def _extract_symptom(description: str) -> str:
