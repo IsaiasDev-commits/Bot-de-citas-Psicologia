@@ -525,7 +525,7 @@ if __name__ == "__main__":
     # Crear tablas de la base de datos si no existen
     with app.app_context():
         db.create_all()
-        app.logger.info("✅ Tablas de base de datos verificadas/creadas")
+        app.logger.info("Tablas de base de datos verificadas/creadas")
 
     # Verificar variables de entorno en producción
     if os.environ.get('FLASK_ENV') == 'production':
@@ -536,7 +536,7 @@ if __name__ == "__main__":
             app.logger.error(f"ERROR: Variables de entorno faltantes en producción: {missing_vars}")
             # No salir en producción, solo loggear el error
         else:
-            app.logger.info("✅ Todas las variables de entorno requeridas están configuradas")
+            app.logger.info("Todas las variables de entorno requeridas estan configuradas")
     
     # Crear directorios necesarios
     for directory in ["logs", "conversaciones", "datos"]:
