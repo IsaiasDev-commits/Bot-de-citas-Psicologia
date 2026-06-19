@@ -69,6 +69,15 @@ class TestAdminLogin:
         assert r.status_code == 200
 
 
+    def test_logout_post_redirige(self, auth_client):
+        r = auth_client.post("/admin/logout", follow_redirects=False)
+        assert r.status_code in (301, 302)
+
+    def test_logout_get_no_permitido(self, client):
+        r = client.get("/admin/logout")
+        assert r.status_code == 405
+
+
 # ── rutas protegidas ──────────────────────────────────────────────────────────
 
 class TestAdminProtectedRoutes:

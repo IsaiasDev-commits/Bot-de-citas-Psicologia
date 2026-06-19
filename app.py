@@ -214,7 +214,7 @@ def verificar_horario():
         fecha = data['fecha']
         hora = data['hora']
         
-        app.logger.info(f"🔍 Verificando horario: {fecha} {hora}")
+        app.logger.info(f"Verificando horario: {fecha} {hora}")
         
         # Validación básica primero
         try:
@@ -226,7 +226,7 @@ def verificar_horario():
         # Verificar servicio de calendario primero
         service = get_calendar_service()
         if not service:
-            app.logger.error("❌ Servicio de calendario no disponible")
+            app.logger.error("Servicio de calendario no disponible")
             return jsonify({"disponible": False, "error": "Servicio no disponible"})
         
         # Verificación estricta
@@ -246,10 +246,10 @@ def verificar_horario():
                 orderBy='startTime'
             ).execute()
             
-            app.logger.info(f"📅 Eventos encontrados: {len(eventos.get('items', []))}")
+            app.logger.debug(f"Eventos encontrados: {len(eventos.get('items', []))}")
             
         except Exception as e:
-            app.logger.error(f"❌ Error al listar eventos: {e}")
+            app.logger.error(f"Error al listar eventos: {e}")
             return jsonify({"disponible": False, "error": "Error al verificar calendario"})
         
         # Verificar superposición 
@@ -268,7 +268,7 @@ def verificar_horario():
                     if fecha_inicio and fecha_fin:
                         # Verificar superposición estricta
                         if (fecha_inicio < hora_solicitada_end and fecha_fin > hora_solicitada_start):
-                            app.logger.info(f"❌ Horario {hora} ocupado por evento: {evento.get('summary', 'Sin título')}")
+                            app.logger.info(f"Horario {hora} ocupado por evento: {evento.get('summary', 'Sin titulo')}")
                             disponible = False
                             break
                         
@@ -276,7 +276,7 @@ def verificar_horario():
                 app.logger.warning(f"Error parsing event time: {e}")
                 continue
         
-        app.logger.info(f"Horario {fecha} {hora}: {'✅ DISPONIBLE' if disponible else '❌ OCUPADO'}")
+        app.logger.info(f"Horario {fecha} {hora}: {'disponible' if disponible else 'ocupado'}")
         
         return jsonify({"disponible": disponible})
         
@@ -363,7 +363,7 @@ def agendar_cita():
         except Exception as db_err:
             app.logger.warning(f"No se pudo guardar cita en DB: {db_err}")
 
-        app.logger.info(f"✅ Cita agendada exitosamente: {fecha} {hora} para {telefono}")
+        app.logger.info(f"Cita agendada exitosamente: {fecha} {hora} para {telefono}")
 
         # Actualizar sesión para mostrar estado final
         if "conversacion_data" not in session:
