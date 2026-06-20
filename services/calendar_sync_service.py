@@ -95,15 +95,15 @@ def update_calendar_event_status(appointment: Appointment, new_status: str) -> b
             service.events().delete(calendarId="primary", eventId=appointment.calendar_event_id).execute()
             return True
 
-        status_emojis = {"confirmed": "✅ CONFIRMADA", "completed": "✔️ COMPLETADA", "pending": "⏳ PENDIENTE"}
-        label = status_emojis.get(new_status, new_status.upper())
+        status_labels = {"confirmed": "CONFIRMADA", "completed": "COMPLETADA", "pending": "PENDIENTE"}
+        label = status_labels.get(new_status, new_status.upper())
 
-        desc = event.get("description", "")
-        for emoji in ["✅", "✔️", "⏳"]:
-            desc = desc.replace(emoji, "")
-        desc = f"{label}\n{desc.strip()}"
-
-        event["description"] = desc
+        lines = event.get("description", "").splitlines()
+        _old_labels = {"CONFIRMADA", "COMPLETADA", "PENDIENTE"}
+        if lines and lines[0].strip() in _old_labels:
+            lines = lines[1:]
+        body = "\n".join(lines).strip()
+        event["description"] = f"{label}\n{body}" if body else label
         service.events().update(calendarId="primary", eventId=appointment.calendar_event_id, body=event).execute()
         return True
 

@@ -374,16 +374,16 @@ def agendar_cita():
             session["conversacion_data"] = {"interacciones": []}
 
         mensaje_confirmacion = (
-            f"✅ **Cita confirmada**\n\n"
-            f"📅 **Fecha:** {fecha}\n"
-            f"⏰ **Hora:** {hora}\n"
-            f"📱 **Teléfono:** {telefono}\n\n"
+            f"Cita confirmada\n\n"
+            f"Fecha: {fecha}\n"
+            f"Hora: {hora}\n"
+            f"Telefono: {telefono}\n\n"
             f"Tu cita ha sido registrada correctamente."
         )
         mensaje_cierre = (
-            f"💚 **Gracias por agendar con Equilibra**\n\n"
-            f"Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
-            f"Gracias por confiar en este espacio."
+            "Gracias por agendar con Equilibra\n\n"
+            "Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
+            "Gracias por confiar en este espacio."
         )
 
         conversacion_data = session["conversacion_data"]
