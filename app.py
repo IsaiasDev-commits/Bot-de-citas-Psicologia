@@ -31,6 +31,7 @@ if _sentry_dsn:
     )
 
 from services.validation_service import ValidationService
+from services.admin_service import find_or_create_patient
 from constants import SINTOMAS_DISPONIBLES
 from services.conversation_service import ConversationService
 from services.appointment_service import (
@@ -52,7 +53,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-from models import db, User
+from models import db, User, Appointment as AppointmentModel
 from flask_migrate import Migrate
 db.init_app(app)
 migrate = Migrate(app, db)
@@ -83,11 +84,15 @@ if os.environ.get('FLASK_ENV') != 'production':
     with app.app_context():
         try:
             db.create_all()
-        except Exception:
-            pass
+        except Exception as _e:
+            app.logger.warning(f"db.create_all() failed (migrations may not be applied): {_e}")
 
 # Configuración desde variables de entorno
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "clave_por_defecto_para_desarrollo")
+_default_secret = "clave_por_defecto_para_desarrollo"
+_secret_key = os.getenv("FLASK_SECRET_KEY", _default_secret)
+if _secret_key == _default_secret and os.getenv("FLASK_ENV") == "production":
+    raise RuntimeError("FLASK_SECRET_KEY must be set to a strong random value in production")
+app.secret_key = _secret_key
 
 app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024  
 
@@ -213,7 +218,7 @@ def verificar_horario():
         fecha = data['fecha']
         hora = data['hora']
         
-        app.logger.info(f"🔍 Verificando horario: {fecha} {hora}")
+        app.logger.info(f"Verificando horario: {fecha} {hora}")
         
         # Validación básica primero
         try:
@@ -225,7 +230,7 @@ def verificar_horario():
         # Verificar servicio de calendario primero
         service = get_calendar_service()
         if not service:
-            app.logger.error("❌ Servicio de calendario no disponible")
+            app.logger.error("Servicio de calendario no disponible")
             return jsonify({"disponible": False, "error": "Servicio no disponible"})
         
         # Verificación estricta
@@ -245,10 +250,10 @@ def verificar_horario():
                 orderBy='startTime'
             ).execute()
             
-            app.logger.info(f"📅 Eventos encontrados: {len(eventos.get('items', []))}")
+            app.logger.debug(f"Eventos encontrados: {len(eventos.get('items', []))}")
             
         except Exception as e:
-            app.logger.error(f"❌ Error al listar eventos: {e}")
+            app.logger.error(f"Error al listar eventos: {e}")
             return jsonify({"disponible": False, "error": "Error al verificar calendario"})
         
         # Verificar superposición 
@@ -267,7 +272,7 @@ def verificar_horario():
                     if fecha_inicio and fecha_fin:
                         # Verificar superposición estricta
                         if (fecha_inicio < hora_solicitada_end and fecha_fin > hora_solicitada_start):
-                            app.logger.info(f"❌ Horario {hora} ocupado por evento: {evento.get('summary', 'Sin título')}")
+                            app.logger.info(f"Horario {hora} ocupado por evento: {evento.get('summary', 'Sin titulo')}")
                             disponible = False
                             break
                         
@@ -275,7 +280,7 @@ def verificar_horario():
                 app.logger.warning(f"Error parsing event time: {e}")
                 continue
         
-        app.logger.info(f"Horario {fecha} {hora}: {'✅ DISPONIBLE' if disponible else '❌ OCUPADO'}")
+        app.logger.info(f"Horario {fecha} {hora}: {'disponible' if disponible else 'ocupado'}")
         
         return jsonify({"disponible": disponible})
         
@@ -345,8 +350,6 @@ def agendar_cita():
 
         # Guardar cita y paciente en la base de datos
         try:
-            from services.admin_service import find_or_create_patient
-            from models import Appointment as AppointmentModel
             patient_name = data.get("nombre", "Paciente")
             patient = find_or_create_patient(
                 name=patient_name, phone=telefono, symptom=sintoma
@@ -364,23 +367,23 @@ def agendar_cita():
         except Exception as db_err:
             app.logger.warning(f"No se pudo guardar cita en DB: {db_err}")
 
-        app.logger.info(f"✅ Cita agendada exitosamente: {fecha} {hora} para {telefono}")
+        app.logger.info(f"Cita agendada exitosamente: {fecha} {hora} para {telefono}")
 
         # Actualizar sesión para mostrar estado final
         if "conversacion_data" not in session:
             session["conversacion_data"] = {"interacciones": []}
 
         mensaje_confirmacion = (
-            f"✅ **Cita confirmada**\n\n"
-            f"📅 **Fecha:** {fecha}\n"
-            f"⏰ **Hora:** {hora}\n"
-            f"📱 **Teléfono:** {telefono}\n\n"
+            f"Cita confirmada\n\n"
+            f"Fecha: {fecha}\n"
+            f"Hora: {hora}\n"
+            f"Telefono: {telefono}\n\n"
             f"Tu cita ha sido registrada correctamente."
         )
         mensaje_cierre = (
-            f"💚 **Gracias por agendar con Equilibra**\n\n"
-            f"Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
-            f"Gracias por confiar en este espacio."
+            "Gracias por agendar con Equilibra\n\n"
+            "Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
+            "Gracias por confiar en este espacio."
         )
 
         conversacion_data = session["conversacion_data"]
@@ -401,6 +404,12 @@ def agendar_cita():
     except Exception as e:
         app.logger.error(f"Error al agendar cita: {e}")
         return jsonify({"error": "Error al procesar la cita"}), 500
+
+@app.route('/ping')
+def ping():
+    """Liveness probe ligero — sin I/O, para load balancers y monitores de uptime."""
+    return jsonify({"ok": True}), 200
+
 
 @app.route('/health')
 def health_check():
@@ -516,7 +525,7 @@ if __name__ == "__main__":
     # Crear tablas de la base de datos si no existen
     with app.app_context():
         db.create_all()
-        app.logger.info("✅ Tablas de base de datos verificadas/creadas")
+        app.logger.info("Tablas de base de datos verificadas/creadas")
 
     # Verificar variables de entorno en producción
     if os.environ.get('FLASK_ENV') == 'production':
@@ -527,7 +536,7 @@ if __name__ == "__main__":
             app.logger.error(f"ERROR: Variables de entorno faltantes en producción: {missing_vars}")
             # No salir en producción, solo loggear el error
         else:
-            app.logger.info("✅ Todas las variables de entorno requeridas están configuradas")
+            app.logger.info("Todas las variables de entorno requeridas estan configuradas")
     
     # Crear directorios necesarios
     for directory in ["logs", "conversaciones", "datos"]:

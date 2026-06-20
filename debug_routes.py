@@ -3,9 +3,8 @@ Blueprint de rutas de diagnóstico - solo se registra fuera de producción.
 NUNCA debe estar accesible en producción.
 """
 
-from flask import Blueprint, jsonify, current_app
+from flask import Blueprint, jsonify
 import os
-import time
 
 debug_bp = Blueprint("debug", __name__)
 
@@ -115,24 +114,3 @@ def test_calendar():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-
-@debug_bp.route("/debug-cache")
-def debug_cache():
-    from app import respuestas_ia_cache, respuestas_ia_cache_lock, CACHE_MAX_SIZE, CACHE_TTL
-    try:
-        with respuestas_ia_cache_lock:
-            entries = []
-            for key, (ts, resp) in list(respuestas_ia_cache.items())[:5]:
-                entries.append({
-                    "key": key[:12] + "...",
-                    "age_seconds": int(time.time() - ts),
-                    "preview": resp[:100] + "..." if len(resp) > 100 else resp,
-                })
-            return jsonify({
-                "total_entries": len(respuestas_ia_cache),
-                "max_size": CACHE_MAX_SIZE,
-                "ttl_seconds": CACHE_TTL,
-                "entries": entries,
-            })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500

@@ -1,5 +1,5 @@
-from datetime import datetime
 import json
+from constants import utcnow
 from . import db
 
 
@@ -11,7 +11,7 @@ class Conversation(db.Model):
     session_id = db.Column(db.String(200), nullable=True)
     _messages = db.Column("messages", db.Text, default="[]")
     _detected_symptoms = db.Column("detected_symptoms", db.Text, default="[]")
-    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    started_at = db.Column(db.DateTime, default=utcnow)
     ended_at = db.Column(db.DateTime, nullable=True)
 
     @property

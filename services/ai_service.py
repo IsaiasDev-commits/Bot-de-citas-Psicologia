@@ -36,7 +36,7 @@ def cache_response(max_size: int = 100, ttl: int = 3600):
                 if cache_key in cache:
                     timestamp, response = cache[cache_key]
                     if time.time() - timestamp < ttl:
-                        logger.info(f"✅ Respuesta obtenida del caché para {func.__name__}")
+                        logger.debug(f"Cache hit for {func.__name__}")
                         return response
                     else:
                         # Eliminar entrada expirada
@@ -55,7 +55,7 @@ def cache_response(max_size: int = 100, ttl: int = 3600):
                     
                     # Guardar en caché
                     cache[cache_key] = (time.time(), response)
-                    logger.info(f"💾 Respuesta guardada en caché. Tamaño: {len(cache)}")
+                    logger.debug(f"Cache write for {func.__name__}. Size: {len(cache)}")
             
             return response
         return wrapper
@@ -68,15 +68,13 @@ def log_execution(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         start_time = time.time()
-        logger.info(f"🚀 Iniciando {func.__name__} con args: {args}, kwargs: {kwargs}")
-        
         try:
             result = func(*args, **kwargs)
             execution_time = time.time() - start_time
-            logger.info(f"✅ {func.__name__} completado en {execution_time:.2f}s")
+            logger.debug(f"{func.__name__} completed in {execution_time:.2f}s")
             return result
         except Exception as e:
-            logger.error(f"❌ Error en {func.__name__}: {e}")
+            logger.error(f"Error in {func.__name__}: {e}")
             raise
     
     return wrapper
@@ -137,10 +135,8 @@ class GroqAIService(AIServiceStrategy):
             # Seleccionar modelo óptimo
             model = self.select_model(len(text), complexity)
             
-            logger.info(f"🔥🔥🔥 LLAMANDO A GROQ API REALMENTE 🔥🔥🔥")
-            logger.info(f"📊 Modelo Groq: {model} | Texto: {len(text)} chars | Complejidad: {complexity}")
-            logger.info(f"🔑 API Key configurada: {'SÍ' if self.api_key else 'NO'} (longitud: {len(self.api_key) if self.api_key else 0})")
-            
+            logger.debug(f"Groq request: model={model}, text_len={len(text)}, complexity={complexity}")
+
             # Prompt profesional para psicólogo clínico
             system_prompt = """Eres un psicólogo profesional con enfoque clínico.
 
@@ -176,8 +172,6 @@ Mensaje del usuario:
 
 Responde ahora de forma estructurada y profesional."""
             
-            logger.info(f"📝 Enviando solicitud a Groq API con modelo {model}...")
-            
             response = self.client.chat.completions.create(
                 model=model,
                 messages=[
@@ -188,22 +182,17 @@ Responde ahora de forma estructurada y profesional."""
                 temperature=0.4,
             )
             
-            logger.info(f"🎯🎯🎯 RESPUESTA REAL RECIBIDA DE GROQ 🎯🎯🎯")
-            logger.info(f"✅ Respuesta generada con {model} - Tokens: {response.usage.total_tokens if response.usage else 'N/A'}")
-            
+            logger.info(f"Groq response received. Model: {model}, tokens: {response.usage.total_tokens if response.usage else 'N/A'}")
+
             raw_response = response.choices[0].message.content
-            
+
             # Limpiar respuesta (eliminar cualquier markdown residual)
             cleaned_response = self._clean_response(raw_response)
-            
-            logger.info(f"📝 Longitud respuesta: {len(raw_response)} -> {len(cleaned_response)} caracteres")
-            logger.info(f"📋 Primeros 100 chars: {cleaned_response[:100]}...")
-            
+
             return cleaned_response
             
         except Exception as e:
-            logger.error(f"❌❌❌ ERROR en Groq API: {e}")
-            logger.error(f"📌 Stack trace completo:", exc_info=True)
+            logger.error(f"Groq API error: {e}", exc_info=True)
             return self._get_fallback_response(text)
     
     def _determine_complexity(self, text: str, symptom: str = None) -> str:

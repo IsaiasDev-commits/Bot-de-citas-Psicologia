@@ -3,6 +3,16 @@ import json
 import pytest
 
 
+class TestIndexPage:
+    def test_get_retorna_200(self, client):
+        r = client.get("/")
+        assert r.status_code == 200
+
+    def test_contiene_html(self, client):
+        r = client.get("/")
+        assert b"<html" in r.data.lower() or b"<!doctype" in r.data.lower()
+
+
 class TestHealthCheck:
     def test_health_retorna_200_o_503(self, client):
         r = client.get("/health")
@@ -98,6 +108,21 @@ class TestVerificarHorario:
         assert r.status_code == 400
 
 
+class TestPing:
+    def test_ping_200(self, client):
+        r = client.get("/ping")
+        assert r.status_code == 200
+
+    def test_ping_json(self, client):
+        r = client.get("/ping")
+        assert r.get_json() == {"ok": True}
+
+    def test_ping_rapido_sin_db(self, client):
+        """Verifica que /ping no depende de la DB."""
+        r = client.get("/ping")
+        assert r.status_code == 200
+
+
 class TestReset:
     def test_reset_get_no_permitido(self, client):
         r = client.get("/reset")
@@ -106,3 +131,55 @@ class TestReset:
     def test_reset_post_retorna_json(self, client):
         r = client.post("/reset")
         assert r.content_type.startswith("application/json")
+
+
+class TestCancelarCita:
+    def test_cancelar_get_no_permitido(self, client):
+        r = client.get("/cancelar_cita")
+        assert r.status_code == 405
+
+    def test_cancelar_post_retorna_success(self, client):
+        r = client.post("/cancelar_cita")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["status"] == "success"
+
+
+class TestObtenerHorariosDisponibles:
+    def test_sin_body_retorna_400(self, client):
+        r = client.post("/obtener-horarios-disponibles", content_type="application/json")
+        assert r.status_code == 400
+
+    def test_sin_fecha_retorna_400(self, client):
+        r = client.post(
+            "/obtener-horarios-disponibles",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        assert r.status_code == 400
+
+    def test_fecha_invalida_retorna_400(self, client):
+        r = client.post(
+            "/obtener-horarios-disponibles",
+            data=json.dumps({"fecha": "no-es-fecha"}),
+            content_type="application/json",
+        )
+        assert r.status_code == 400
+
+    def test_fecha_valida_retorna_lista(self, client):
+        r = client.post(
+            "/obtener-horarios-disponibles",
+            data=json.dumps({"fecha": "2027-06-15"}),
+            content_type="application/json",
+        )
+        assert r.status_code == 200
+        assert isinstance(r.get_json(), list)
+
+    def test_domingo_retorna_lista_vacia(self, client):
+        r = client.post(
+            "/obtener-horarios-disponibles",
+            data=json.dumps({"fecha": "2027-06-13"}),  # domingo
+            content_type="application/json",
+        )
+        assert r.status_code == 200
+        assert r.get_json() == []

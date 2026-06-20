@@ -140,22 +140,22 @@ def crear_evento_calendar(fecha: str, hora: str, telefono: str, sintoma: str) ->
 
         event_id = event_created.get('id')
         html_link = event_created.get('htmlLink')
-        logger.info(f"✅ Evento creado exitosamente. ID: {event_id}")
+        logger.info(f"Calendar event created. ID: {event_id}")
 
         return {'event_id': event_id, 'html_link': html_link}
 
     except ValueError as ve:
-        logger.error(f"❌ Formato de fecha/hora inválido: {ve}")
+        logger.error(f"Formato de fecha/hora invalido: {ve}")
         return None
     except HttpError as error:
-        logger.error(f"❌ Error de Google Calendar API: {error}")
+        logger.error(f"Error de Google Calendar API: {error}")
         if error.resp.status == 403:
-            logger.error("❌ Error 403: Permisos insuficientes.")
+            logger.error("Error 403: Permisos insuficientes.")
         elif error.resp.status == 404:
-            logger.error("❌ Error 404: Calendario no encontrado.")
+            logger.error("Error 404: Calendario no encontrado.")
         return None
     except Exception as e:
-        logger.error(f"❌ Error inesperado al crear evento: {e}")
+        logger.error(f"Error inesperado al crear evento: {e}")
         return None
 
 def parsear_fecha_google(event: Dict[str, Any]) -> Tuple[Optional[datetime], Optional[datetime]]:
@@ -178,7 +178,7 @@ def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
         # 2. Validación estricta de horario
         es_valido, mensaje = validar_horario_cita(fecha, hora)
         if not es_valido:
-            logger.warning(f"❌ Validación fallida para {fecha} {hora}: {mensaje}")
+            logger.warning(f"Validacion fallida para {fecha} {hora}: {mensaje}")
             return {"disponible": False, "error": mensaje}
         
         # 3. Verificar disponibilidad en Google Calendar
@@ -215,12 +215,12 @@ def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
                     fecha_inicio, fecha_fin = parsear_fecha_google(evento)
                     if fecha_inicio and fecha_fin:
                         if (fecha_inicio < hora_solicitada_end and fecha_fin > hora_solicitada_start):
-                            logger.warning(f"❌ Verificación atómica: Horario {hora} ocupado por {evento.get('summary', 'Sin título')}")
+                            logger.warning(f"Verificacion atomica: Horario {hora} ocupado por {evento.get('summary', 'Sin titulo')}")
                             return {"disponible": False, "error": "Horario ya ocupado"}
                 except ValueError:
                     continue
         
-        logger.info(f"✅ Horario {fecha} {hora} disponible y válido")
+        logger.info(f"Horario {fecha} {hora} disponible.")
         return {"disponible": True}
         
     except Exception as e:
@@ -231,7 +231,6 @@ def verificar_disponibilidad_atomica(fecha: str, hora: str) -> Dict[str, Any]:
 
 def enviar_correo_resend(destinatario: str, fecha: str, hora: str, telefono: str, sintoma: str) -> bool:
     """Usar Resend API para enviar emails"""
-    destinatario = _NOTIFICATION_EMAIL
     try:
         resend_api_key = os.getenv('RESEND_API_KEY')
         
@@ -272,15 +271,15 @@ def enviar_correo_resend(destinatario: str, fecha: str, hora: str, telefono: str
         respuesta = resend.Emails.send({
             "from": "Equilibra <onboarding@resend.dev>",
             "to": destinatario,
-            "subject": f"✅ Nueva cita agendada - {fecha} {hora}",
+            "subject": f"Nueva cita agendada - {fecha} {hora}",
             "html": mensaje
         })
 
-        logger.info(f"✅ Correo enviado correctamente via Resend: {respuesta}")
+        logger.info(f"Correo enviado correctamente via Resend: {respuesta}")
         return True
-            
+
     except Exception as e:
-        logger.error(f"❌ Error enviando correo con Resend: {e}")
+        logger.error(f"Error enviando correo con Resend: {e}")
         return False
 
 def enviar_correo_confirmacion(destinatario: str, fecha: str, hora: str, telefono: str, sintoma: str) -> bool:
@@ -290,21 +289,20 @@ def enviar_correo_confirmacion(destinatario: str, fecha: str, hora: str, telefon
     - Si solo RESEND_API_KEY: envía de forma síncrona vía Resend.
     - Sin credenciales: solo loggea (modo desarrollo).
     """
-    destinatario = _NOTIFICATION_EMAIL
 
     if os.getenv('REDIS_URL') and os.getenv('RESEND_API_KEY'):
         try:
             from tasks import send_confirmation_email
             send_confirmation_email.delay(destinatario, fecha, hora, telefono, sintoma)
-            logger.info(f"📧 Email encolado via Celery: {fecha} {hora}")
+            logger.info(f"Email encolado via Celery: {fecha} {hora}")
             return True
         except Exception as e:
-            logger.warning(f"⚠️ Celery no disponible, enviando sync: {e}")
+            logger.warning(f"Celery no disponible, enviando sync: {e}")
 
     if os.getenv('RESEND_API_KEY'):
         return enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma)
 
-    logger.info(f"📧 Email simulado (sin RESEND_API_KEY): {fecha} {hora} → {destinatario}")
+    logger.info(f"Email simulado (sin RESEND_API_KEY): {fecha} {hora} -> {destinatario}")
     return True
 
 # ==================== AGENDAMIENTO COMPLETO ====================
@@ -346,7 +344,7 @@ def agendar_cita_completa(fecha: str, hora: str, telefono: str, sintoma: str) ->
 
         # 5. Enviar correo de confirmación (no bloqueante)
         email_enviado = enviar_correo_confirmacion(
-            "chatbotequilibra@gmail.com", fecha, hora, telefono, sintoma
+            _NOTIFICATION_EMAIL, fecha, hora, telefono, sintoma
         )
         if not email_enviado:
             logger.warning("Email no enviado (cita creada en calendario)")

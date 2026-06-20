@@ -60,7 +60,7 @@ def send_confirmation_email(
         success = enviar_correo_resend(destinatario, fecha, hora, telefono, sintoma)
         if not success:
             raise RuntimeError("enviar_correo_resend devolvió False")
-        logger.info(f"Email de confirmación enviado: {fecha} {hora} → {destinatario}")
+        logger.info(f"Email de confirmacion enviado: {fecha} {hora} a {destinatario}")
         return {"status": "sent", "to": destinatario, "fecha": fecha, "hora": hora}
     except Exception as exc:
         logger.error(

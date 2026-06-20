@@ -11,7 +11,7 @@ from models import db as _db, Conversation as _ConvModel, Patient as _Patient
 from .ai_service import AIServiceFactory
 from .appointment_service import agendar_cita_completa as _agendar_cita_completa
 from .validation_service import ValidationService
-from constants import SINTOMAS_DISPONIBLES, detectar_crisis, CRISIS_RESPONSE
+from constants import SINTOMAS_DISPONIBLES, detectar_crisis, CRISIS_RESPONSE, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -100,9 +100,9 @@ class DeepeningState(ConversationState):
             
             mensaje = (
                 "Excelente decisión. Por favor completa los datos para tu cita presencial:\n\n"
-                "📅 Selecciona una fecha disponible\n"
-                "⏰ Elige un horario que te convenga\n"
-                "📱 Ingresa tu número de teléfono para contactarte"
+                "Selecciona una fecha disponible\n"
+                "Elige un horario que te convenga\n"
+                "Ingresa tu numero de telefono para contactarte"
             )
             self.conversation_service.add_bot_interaction(mensaje, session.get("sintoma_actual"))
             logger.info("Usuario solicitó cita mediante botón - Saltando a agendamiento")
@@ -143,7 +143,7 @@ class AppointmentState(ConversationState):
         
         if not all([fecha, telefono, hora]):
             self.conversation_service.add_bot_interaction(
-                "⚠️ **Campos incompletos**\n\nPor favor completa todos los campos requeridos para agendar tu cita.",
+                "Campos incompletos. Por favor completa todos los datos requeridos para agendar tu cita.",
                 None
             )
             logger.warning("Faltan campos en el formulario de cita")
@@ -153,7 +153,7 @@ class AppointmentState(ConversationState):
         valido, mensaje_error = self.validation_service.validate_phone(telefono)
         if not valido:
             self.conversation_service.add_bot_interaction(
-                f"⚠️ {mensaje_error}. Por favor, ingrésalo de nuevo.",
+                f"{mensaje_error}. Por favor, ingrésalo de nuevo.",
                 None
             )
             logger.warning(f"Teléfono inválido: {telefono}")
@@ -163,7 +163,7 @@ class AppointmentState(ConversationState):
         es_valido, mensaje_validacion = self.validation_service.validate_appointment_time(fecha, hora)
         if not es_valido:
             self.conversation_service.add_bot_interaction(
-                f"⚠️ {mensaje_validacion}. Por favor selecciona otro horario.",
+                f"{mensaje_validacion}. Por favor selecciona otro horario.",
                 None
             )
             logger.warning(f"Horario inválido: {fecha} {hora} - {mensaje_validacion}")
@@ -177,7 +177,7 @@ class AppointmentState(ConversationState):
             return True, None
         else:
             self.conversation_service.add_bot_interaction(
-                "❌ **Error al agendar**\n\nLo siento, hubo un problema al agendar tu cita. Por favor, intenta nuevamente.",
+                "Lo siento, hubo un problema al agendar tu cita. Por favor, intenta nuevamente.",
                 None
             )
             return False, message
@@ -339,15 +339,15 @@ class ConversationService:
                 logger.warning(f"Cita creada en Calendar pero no en DB: {db_err}")
 
             self.add_bot_interaction(
-                f"✅ **Cita confirmada**\n\n"
-                f"📅 **Fecha:** {fecha}\n"
-                f"⏰ **Hora:** {hora}\n"
-                f"📱 **Teléfono:** {telefono}\n\n"
+                f"Cita confirmada\n\n"
+                f"Fecha: {fecha}\n"
+                f"Hora: {hora}\n"
+                f"Telefono: {telefono}\n\n"
                 f"Tu cita ha sido registrada correctamente.",
                 None,
             )
             self.add_bot_interaction(
-                "💚 **Gracias por agendar con Equilibra**\n\n"
+                "Gracias por agendar con Equilibra\n\n"
                 "Hemos recibido tu solicitud y nos pondremos en contacto contigo pronto.\n"
                 "Gracias por confiar en este espacio.",
                 None,
@@ -375,7 +375,7 @@ class ConversationService:
                 conv = _ConvModel(
                     patient_id=patient.id if patient else None,
                     session_id=session.get("_id", ""),
-                    ended_at=datetime.utcnow(),
+                    ended_at=utcnow(),
                 )
                 conv.messages = interacciones
                 conv.detected_symptoms = symptoms

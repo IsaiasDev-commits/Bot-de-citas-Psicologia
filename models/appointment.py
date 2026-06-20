@@ -1,4 +1,4 @@
-from datetime import datetime
+from constants import utcnow
 from . import db
 
 
@@ -34,8 +34,8 @@ class Appointment(db.Model):
     status = db.Column(db.String(20), nullable=False, default="pending")
     calendar_event_id = db.Column(db.String(200), nullable=True)
     psychologist_notes = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
 
     @property
     def status_label(self) -> str:

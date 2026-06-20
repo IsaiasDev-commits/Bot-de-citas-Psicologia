@@ -1,3 +1,4 @@
+from constants import utcnow
 from datetime import datetime, timedelta
 from flask import request, jsonify
 from flask_login import current_user
@@ -23,7 +24,7 @@ def update_appointment_status(appt_id):
 
     cal_ok = update_calendar_event_status(appt, new_status)
     appt.status = new_status
-    appt.updated_at = datetime.utcnow()
+    appt.updated_at = utcnow()
     db.session.commit()
 
     return jsonify({
@@ -70,7 +71,7 @@ def update_clinical_note(patient_id, note_id):
         return jsonify({"error": f"El contenido no puede superar {_MAX_NOTE_LENGTH} caracteres"}), 400
 
     note.content = content
-    note.updated_at = datetime.utcnow()
+    note.updated_at = utcnow()
     db.session.commit()
     return jsonify({"ok": True, "note": note.to_dict()})
 
@@ -94,7 +95,7 @@ def calendar_sync():
 @admin_bp.route("/api/appointments/check-new")
 @login_required_admin
 def check_new_appointments():
-    since = datetime.utcnow() - timedelta(hours=24)
+    since = utcnow() - timedelta(hours=24)
     appts = (
         Appointment.query
         .join(Patient)
@@ -118,6 +119,6 @@ def update_appointment_notes(appt_id):
     if len(notes) > _MAX_NOTE_LENGTH:
         return jsonify({"error": f"Las notas no pueden superar {_MAX_NOTE_LENGTH} caracteres"}), 400
     appt.psychologist_notes = notes
-    appt.updated_at = datetime.utcnow()
+    appt.updated_at = utcnow()
     db.session.commit()
     return jsonify({"ok": True})
